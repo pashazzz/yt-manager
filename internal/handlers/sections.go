@@ -8,16 +8,24 @@ import (
 	"github.com/pavlo/yt-manager/internal/middleware"
 	"github.com/pavlo/yt-manager/internal/models"
 	"github.com/pavlo/yt-manager/internal/repository"
+	"github.com/pavlo/yt-manager/internal/ytdlp"
 )
 
 // SectionHandler держит зависимости для хендлеров разделов.
 type SectionHandler struct {
 	sections *repository.SectionRepo
 	shows    *repository.ShowRepo
+	episodes *repository.EpisodeRepo
+	ytClient *ytdlp.Client
 }
 
-func NewSectionHandler(sections *repository.SectionRepo, shows *repository.ShowRepo) *SectionHandler {
-	return &SectionHandler{sections: sections, shows: shows}
+func NewSectionHandler(
+	sections *repository.SectionRepo,
+	shows *repository.ShowRepo,
+	episodes *repository.EpisodeRepo,
+	ytClient *ytdlp.Client,
+) *SectionHandler {
+	return &SectionHandler{sections: sections, shows: shows, episodes: episodes, ytClient: ytClient}
 }
 
 // ListSections godoc
@@ -147,5 +155,84 @@ func (h *SectionHandler) ListShowsBySection(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"section": section, "shows": shows})
+
+	// Загружаем скрытое шоу для одиночных видео
+	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, sectionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// И его эпизоды
+	singlesEpisodes, err := h.episodes.FindByShow(singlesShow.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"section":         section,
+		"shows":           shows,
+		"singlesShow":     singlesShow,
+		"singlesEpisodes": singlesEpisodes,
+	})
+}
+
+// AddSingleVideo godoc
+// POST /sections/:id/episodes
+// Body: { "url": "..." }
+func (h *SectionHandler) AddSingleVideo(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+	sectionID := c.Param("id")
+
+	var body struct {
+		URL string `json:"url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	section, err := h.sections.FindByID(sectionID)
+	if err != nil || section == nil || section.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, sectionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to ensure singles show: " + err.Error()})
+		return
+	}
+
+	info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.URL)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch video info: " + err.Error()})
+		return
+	}
+
+	maxOrderIndex, err := h.episodes.GetMaxOrderIndex(singlesShow.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get order index: " + err.Error()})
+		return
+	}
+
+	episodes := make([]*models.Episode, 0, len(info.Entries))
+	for i, entry := range info.Entries {
+		episodes = append(episodes, &models.Episode{
+			ShowID:     singlesShow.ID,
+			VideoID:    entry.ID,
+			Title:      entry.Title,
+			Duration:   entry.Duration,
+			OrderIndex: maxOrderIndex + 1 + i,
+		})
+	}
+
+	if len(episodes) > 0 {
+		if err := h.episodes.BulkCreate(episodes); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	c.JSON(http.StatusCreated, gin.H{"episodes": episodes})
 }

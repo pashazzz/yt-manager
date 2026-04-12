@@ -814,3 +814,18 @@ input { font-family: inherit; }
 }
 .btn-back-inline:hover { color: var(--text); }
 
+/* ── Episode list inline ── */
+.episode-list-inline {
+  margin-top: 32px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.episode-list-inline .episode-list-header {
+  background: rgba(9,9,15,.4);
+  padding: 16px 20px;
+}
+.episode-list-inline .episode-list-scroll {
+  max-height: 480px;
+}

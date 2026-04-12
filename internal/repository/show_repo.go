@@ -34,6 +34,7 @@ func (r *ShowRepo) Create(s *models.Show) error {
 		"ownerId":      s.OwnerID,
 		"sectionId":    s.SectionID,
 		"reverseOrder": s.ReverseOrder,
+		"isSingles":    s.IsSingles,
 		"createdAt":    s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionShows, doc)
@@ -60,7 +61,6 @@ func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 // Если includeUncategorized=true, также возвращает шоу без sectionId
 // (созданные до введения разделов) — используется для раздела Default.
 func (r *ShowRepo) FindBySection(ownerID, sectionID string, includeUncategorized bool) ([]*models.Show, error) {
-	// Загружаем все шоу профиля, фильтруем в Go — безопасно для pet-project
 	all, err := r.FindByOwner(ownerID)
 	if err != nil {
 		return nil, err
@@ -68,6 +68,9 @@ func (r *ShowRepo) FindBySection(ownerID, sectionID string, includeUncategorized
 
 	result := make([]*models.Show, 0, len(all))
 	for _, s := range all {
+		if s.IsSingles {
+			continue // Не возвращаем служебное шоу в списке обычных шоу
+		}
 		if s.SectionID == sectionID {
 			result = append(result, s)
 		} else if includeUncategorized && s.SectionID == "" {
@@ -112,6 +115,34 @@ func (r *ShowRepo) Delete(id string) error {
 	)
 }
 
+// EnsureSinglesShow возвращает специальное скрытое шоу для отдельных видео раздела,
+// или создаёт его, если оно ещё не существует.
+func (r *ShowRepo) EnsureSinglesShow(ownerID, sectionID string) (*models.Show, error) {
+	q := query.NewQuery(db.CollectionShows).
+		Where(query.Field("ownerId").Eq(ownerID).
+			And(query.Field("sectionId").Eq(sectionID)).
+			And(query.Field("isSingles").Eq(true)))
+
+	doc, err := r.db.FindFirst(q)
+	if err != nil && !errors.Is(err, clover.ErrDocumentNotExist) {
+		return nil, err
+	}
+	if doc != nil {
+		return docToShow(doc), nil
+	}
+
+	s := &models.Show{
+		Title:       "Отдельные видео",
+		OwnerID:     ownerID,
+		SectionID:   sectionID,
+		IsSingles:   true,
+	}
+	if err := r.Create(s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 // --- helpers ---
 
 func docToShow(d *document.Document) *models.Show {
@@ -123,6 +154,7 @@ func docToShow(d *document.Document) *models.Show {
 		OwnerID:      stringField(d, "ownerId"),
 		SectionID:    stringField(d, "sectionId"),
 		ReverseOrder: showBoolField(d, "reverseOrder"),
+		IsSingles:    showBoolField(d, "isSingles"),
 		CreatedAt:    createdAt,
 	}
 }

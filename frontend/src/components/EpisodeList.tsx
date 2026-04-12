@@ -12,6 +12,7 @@ interface Props {
   onAddVideo?: () => void
   isReorderable?: boolean
   onReorder?: (episodes: Episode[]) => void
+  variant?: 'sidebar' | 'inline'
 }
 
 function fmtDuration(sec: number): string {
@@ -102,7 +103,7 @@ function SortableEpisode({ ep, isActive, onSelect, onToggleWatched }: any) {
   )
 }
 
-export default function EpisodeList({ episodes, currentId, onSelect, onToggleWatched, onAddVideo, isReorderable, onReorder }: Props) {
+export default function EpisodeList({ episodes, currentId, onSelect, onToggleWatched, onAddVideo, isReorderable, onReorder, variant = 'sidebar' }: Props) {
   const watchedCount = episodes.filter(e => e.isWatched).length
 
   const sensors = useSensors(
@@ -126,8 +127,11 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
     }
   }
 
+  const Tag = variant === 'inline' ? 'div' : 'aside'
+  const className = variant === 'inline' ? 'episode-list-inline' : 'episode-list-sidebar'
+
   return (
-    <aside className="episode-list-sidebar">
+    <Tag className={className}>
       <div className="episode-list-header">
         <div className="episode-list-title">Эпизоды</div>
         <div className="episode-list-count">
@@ -171,6 +175,6 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
             </div>
         )}
       </div>
-    </aside>
+    </Tag>
   )
 }

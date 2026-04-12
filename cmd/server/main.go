@@ -63,7 +63,7 @@ func main() {
 	// --- Хендлеры ---
 	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, sectionRepo, ytClient)
 	episodeHandler := handlers.NewEpisodeHandler(episodeRepo, showRepo)
-	sectionHandler := handlers.NewSectionHandler(sectionRepo, showRepo)
+	sectionHandler := handlers.NewSectionHandler(sectionRepo, showRepo, episodeRepo, ytClient)
 
 	// --- Маршруты ---
 	api := r.Group("/api/v1")
@@ -74,6 +74,7 @@ func main() {
 		api.POST("/sections/:id/delete", sectionHandler.DeleteSection)
 		api.GET("/sections/:id/shows", sectionHandler.ListShowsBySection)
 		api.POST("/sections/reorder", sectionHandler.ReorderSections)
+		api.POST("/sections/:id/episodes", sectionHandler.AddSingleVideo)
 
 		// Шоу
 		api.POST("/shows", showHandler.CreateShow)

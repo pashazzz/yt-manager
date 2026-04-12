@@ -64,6 +64,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ url }),
     }),
+  addSectionEpisode: (sectionId: string, url: string) =>
+    request<{ episodes: Episode[] }>(`/sections/${sectionId}/episodes`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    }),
   reorderEpisodes: (showId: string, orderedIds: string[]) =>
     request<void>(`/shows/${showId}/episodes/reorder`, {
       method: 'POST',

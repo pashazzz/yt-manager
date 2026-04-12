@@ -91,6 +91,7 @@ POST   /api/v1/sections       — создать новый раздел
 POST   /api/v1/sections/:id/delete — удалить (все шоу внутри будут перемещены в Default)
 GET    /api/v1/sections/:id/shows — получить шоу выбранного раздела
 POST   /api/v1/sections/reorder — изменить порядок сортировки разделов (drag-n-drop)
+POST   /api/v1/sections/:id/episodes — добавить одиночное видео напрямую в раздел
 ```
 
 ### Шоу

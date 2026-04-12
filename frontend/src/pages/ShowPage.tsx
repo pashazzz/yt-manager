@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Show, Episode } from '../types'
 import VideoPlayer from '../components/VideoPlayer'
@@ -17,6 +17,7 @@ function fmtDuration(sec: number): string {
 export default function ShowPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [show, setShow] = useState<Show | null>(null)
   const [episodes, setEpisodes] = useState<Episode[]>([])
@@ -32,7 +33,13 @@ export default function ShowPage() {
         setEpisodes(detail.episodes)
         
         const list = detail.show.reverseOrder ? [...detail.episodes].reverse() : detail.episodes
-        const resume = list.find(e => !e.isWatched && e.currentTime > 0)
+        
+        const searchParams = new URLSearchParams(location.search)
+        const reqEpisode = searchParams.get('episode')
+        const exact = reqEpisode ? list.find(e => e.id === reqEpisode) : undefined
+
+        const resume = exact
+          ?? list.find(e => !e.isWatched && e.currentTime > 0)
           ?? list.find(e => !e.isWatched)
           ?? list[0]
         setCurrentEpisode(resume ?? null)

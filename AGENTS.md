@@ -45,7 +45,7 @@ yt-manager/
 │   ├── ytdlp/
 │   │   └── ytdlp.go     # Client.FetchPlaylist() — вызывает yt-dlp binary
 │   ├── handlers/
-│   │   ├── sections.go  # SectionHandler: GET/POST /sections, GET /sections/:id/shows, POST /sections/:id/delete, POST /sections/reorder
+│   │   ├── sections.go  # SectionHandler: GET/POST /sections, GET /sections/:id/shows, POST /sections/:id/delete, POST /sections/reorder, POST /sections/:id/episodes
 │   │   ├── shows.go     # ShowHandler: GET/POST /shows, GET /shows/:id, POST /shows/:id/delete, POST /shows/:id/section, POST /shows/:id/reverse, POST /shows/:id/episodes, POST /shows/:id/episodes/reorder
 │   │   └── episodes.go  # EpisodeHandler: POST /episodes/:id/progress
 │   ├── middleware/
@@ -121,6 +121,7 @@ make clean                             # удаляет bin/, data/, сбрас�
 | `POST` | `/sections/:id/delete` | Удалить раздел (шоу мигрируют в Default) |
 | `GET` | `/sections/:id/shows` | Шоу внутри раздела |
 | `POST` | `/sections/reorder` | Изменить порядок сортировки (drag-and-drop) |
+| `POST` | `/sections/:id/episodes` | Добавить одиночное видео напрямую в раздел (через неявное шоу) |
 | `POST` | `/shows` | Добавить плейлист (с опциональным `sectionId`) или пустое кастомное шоу |
 | `GET` | `/shows/:id` | Шоу + его эпизоды |
 | `POST` | `/shows/:id/delete` | Удалить шоу и все эпизоды |

@@ -36,6 +36,8 @@ export interface ShowDetail {
 export interface SectionShows {
   section: Section
   shows: Show[]
+  singlesShow?: Show
+  singlesEpisodes?: Episode[]
 }
 
 export interface CreateShowResponse {
