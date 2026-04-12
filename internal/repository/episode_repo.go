@@ -49,10 +49,9 @@ func (r *EpisodeRepo) FindByShow(showID string) ([]*models.Episode, error) {
 	return episodes, nil
 }
 
-// FindByID возвращает эпизод по ID или nil, если не найден.
+// FindByID возвращает эпизод по ID.
 func (r *EpisodeRepo) FindByID(id string) (*models.Episode, error) {
 	q := query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id))
-
 	doc, err := r.db.FindFirst(q)
 	if err != nil {
 		if errors.Is(err, clover.ErrDocumentNotExist) {
@@ -64,6 +63,26 @@ func (r *EpisodeRepo) FindByID(id string) (*models.Episode, error) {
 		return nil, nil
 	}
 	return docToEpisode(doc), nil
+}
+
+// GetMaxOrderIndex возвращает максимальный orderIndex для данного шоу.
+// Если эпизодов нет, возвращает -1.
+func (r *EpisodeRepo) GetMaxOrderIndex(showID string) (int, error) {
+	q := query.NewQuery(db.CollectionEpisodes).
+		Where(query.Field("showId").Eq(showID)).
+		Sort(query.SortOption{Field: "orderIndex", Direction: -1})
+
+	doc, err := r.db.FindFirst(q)
+	if err != nil {
+		if errors.Is(err, clover.ErrDocumentNotExist) {
+			return -1, nil
+		}
+		return 0, err
+	}
+	if doc == nil {
+		return -1, nil
+	}
+	return intField(doc, "orderIndex"), nil
 }
 
 // UpdateProgress сохраняет текущую позицию воспроизведения и флаг просмотра.

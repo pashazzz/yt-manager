@@ -30,10 +30,11 @@ export default function ShowPage() {
       .then(detail => {
         setShow(detail.show)
         setEpisodes(detail.episodes)
-        // Выбираем первый непросмотренный эпизод, или первый из всех
-        const resume = detail.episodes.find(e => !e.isWatched && e.currentTime > 0)
-          ?? detail.episodes.find(e => !e.isWatched)
-          ?? detail.episodes[0]
+        
+        const list = detail.show.reverseOrder ? [...detail.episodes].reverse() : detail.episodes
+        const resume = list.find(e => !e.isWatched && e.currentTime > 0)
+          ?? list.find(e => !e.isWatched)
+          ?? list[0]
         setCurrentEpisode(resume ?? null)
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Ошибка загрузки'))
@@ -51,6 +52,28 @@ export default function ShowPage() {
     },
     [],
   )
+
+  const handleToggleReverse = async () => {
+    if (!show) return
+    try {
+      const newRev = !show.reverseOrder
+      await api.updateReverseOrder(show.id, newRev)
+      setShow(s => s ? { ...s, reverseOrder: newRev } : s)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    }
+  }
+
+  const handleAddVideo = async () => {
+    const videoUrl = prompt('Введите ссылку на YouTube видео (например https://youtube.com/watch?v=...):')
+    if (!videoUrl?.trim() || !show) return
+    try {
+      const res = await api.addEpisode(show.id, videoUrl.trim())
+      setEpisodes(prev => [...prev, ...res.episodes])
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка добавления видео')
+    }
+  }
 
   if (loading) {
     return (
@@ -77,6 +100,14 @@ export default function ShowPage() {
           ← Назад
         </button>
         <h1 className="show-page-title">{show.title}</h1>
+        <button 
+          className="btn-ghost" 
+          onClick={handleToggleReverse}
+          title="Изменить порядок воспроизведения"
+          style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
+        >
+          {show.reverseOrder ? 'Сначала новые ▼' : 'Сначала старые ▲'}
+        </button>
       </header>
 
       <div className="show-page-body">
@@ -110,9 +141,10 @@ export default function ShowPage() {
 
         {/* ── Episode list ── */}
         <EpisodeList
-          episodes={episodes}
+          episodes={show.reverseOrder ? [...episodes].reverse() : episodes}
           currentId={currentEpisode?.id ?? ''}
           onSelect={setCurrentEpisode}
+          onAddVideo={handleAddVideo}
         />
       </div>
     </div>

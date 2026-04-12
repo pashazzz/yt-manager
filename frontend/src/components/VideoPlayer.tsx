@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import YouTube, { YouTubeEvent } from 'react-youtube'
 import type { Episode } from '../types'
 import { api } from '../api/client'
@@ -18,7 +18,6 @@ export default function VideoPlayer({ episode, onProgressSaved }: Props) {
   const playerRef = useRef<YouTubeEvent['target'] | null>(null)
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const episodeRef = useRef(episode) // актуальный episode без пересоздания интервала
-  const [showMobileOverlay, setShowMobileOverlay] = useState(isMobile)
 
   // Всегда держим свежий episode в ref
   useEffect(() => { episodeRef.current = episode }, [episode])
@@ -99,7 +98,6 @@ export default function VideoPlayer({ episode, onProgressSaved }: Props) {
   }
 
   const handlePlay = () => {
-    setShowMobileOverlay(false)
     startHeartbeat()
   }
 
@@ -117,17 +115,13 @@ export default function VideoPlayer({ episode, onProgressSaved }: Props) {
     await saveProgress(episode.duration, true)
   }
 
-  const handleMobileStart = () => {
-    setShowMobileOverlay(false)
-    playerRef.current?.playVideo()
-    startHeartbeat()
-  }
+
 
   const opts = {
     width: '100%',
     height: '100%',
     playerVars: {
-      autoplay: isMobile ? 0 : 1,
+      autoplay: 0,
       playsinline: 1,      // iOS: не открывать в системном плеере
       rel: 0,              // Не показывать рекомендации по окончании
       modestbranding: 1,
@@ -136,15 +130,6 @@ export default function VideoPlayer({ episode, onProgressSaved }: Props) {
 
   return (
     <div className="player-wrapper">
-      {showMobileOverlay && (
-        <div className="player-overlay-mobile" onClick={handleMobileStart}>
-          <button className="btn-start-watching">
-            <span className="play-icon">▶</span>
-            Начать просмотр
-          </button>
-        </div>
-      )}
-
       <YouTube
         key={episode.id}         // Перемонтировать при смене эпизода
         videoId={episode.videoId}

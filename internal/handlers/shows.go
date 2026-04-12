@@ -30,16 +30,22 @@ func NewShowHandler(
 
 // CreateShow godoc
 // POST /shows
-// Body: { "playlistUrl": "...", "sectionId": "uuid" (опционально) }
+// Body: { "playlistUrl": "...", "sectionId": "uuid" (опционально), "title": "..." (для пустых) }
 func (h *ShowHandler) CreateShow(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
 	var body struct {
-		PlaylistURL string `json:"playlistUrl" binding:"required"`
+		PlaylistURL string `json:"playlistUrl"`
 		SectionID   string `json:"sectionId"`
+		Title       string `json:"title"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if body.PlaylistURL == "" && body.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "either playlistUrl or title is required"})
 		return
 	}
 
@@ -60,34 +66,44 @@ func (h *ShowHandler) CreateShow(c *gin.Context) {
 		}
 	}
 
-	info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.PlaylistURL)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch playlist: " + err.Error()})
-		return
+	show := &models.Show{
+		OwnerID:   profile.ID,
+		SectionID: body.SectionID,
 	}
 
-	show := &models.Show{
-		Title:       info.Title,
-		PlaylistURL: body.PlaylistURL,
-		OwnerID:     profile.ID,
-		SectionID:   body.SectionID,
+	var episodes []*models.Episode
+
+	if body.PlaylistURL != "" {
+		info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.PlaylistURL)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch playlist: " + err.Error()})
+			return
+		}
+		show.Title = info.Title
+		show.PlaylistURL = body.PlaylistURL
+		
+		episodes = make([]*models.Episode, 0, len(info.Entries))
+		for i, entry := range info.Entries {
+			episodes = append(episodes, &models.Episode{
+				VideoID:    entry.ID,
+				Title:      entry.Title,
+				Duration:   entry.Duration,
+				OrderIndex: i,
+			})
+		}
+	} else {
+		show.Title = body.Title
 	}
+
 	if err := h.shows.Create(show); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	episodes := make([]*models.Episode, 0, len(info.Entries))
-	for i, entry := range info.Entries {
-		episodes = append(episodes, &models.Episode{
-			ShowID:     show.ID,
-			VideoID:    entry.ID,
-			Title:      entry.Title,
-			Duration:   entry.Duration,
-			OrderIndex: i,
-		})
-	}
 	if len(episodes) > 0 {
+		for _, ep := range episodes {
+			ep.ShowID = show.ID
+		}
 		if err := h.episodes.BulkCreate(episodes); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -187,4 +203,91 @@ func (h *ShowHandler) MoveShow(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"id": showID, "sectionId": body.SectionID})
+}
+
+// ReverseShow godoc
+// PATCH /shows/:id/reverse
+// Body: { "reverseOrder": true }
+func (h *ShowHandler) ReverseShow(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+	showID := c.Param("id")
+
+	var body struct {
+		ReverseOrder bool `json:"reverseOrder"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	show, err := h.shows.FindByID(showID)
+	if err != nil || show == nil || show.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	if err := h.shows.UpdateReverseOrder(showID, body.ReverseOrder); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"id": showID, "reverseOrder": body.ReverseOrder})
+}
+
+// AddEpisode godoc
+// POST /shows/:id/episodes
+// Body: { "url": "https://..." }
+func (h *ShowHandler) AddEpisode(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+	showID := c.Param("id")
+
+	var body struct {
+		URL string `json:"url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 1. Проверяем права на шоу
+	show, err := h.shows.FindByID(showID)
+	if err != nil || show == nil || show.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	// 2. Получаем видео через yt-dlp
+	info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.URL)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch video info: " + err.Error()})
+		return
+	}
+
+	// 3. Высчитываем max OrderIndex
+	maxOrderIndex, err := h.episodes.GetMaxOrderIndex(showID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get order index: " + err.Error()})
+		return
+	}
+
+	// 4. Формируем эпизоды
+	episodes := make([]*models.Episode, 0, len(info.Entries))
+	for i, entry := range info.Entries {
+		episodes = append(episodes, &models.Episode{
+			ShowID:     showID,
+			VideoID:    entry.ID,
+			Title:      entry.Title,
+			Duration:   entry.Duration,
+			OrderIndex: maxOrderIndex + 1 + i,
+		})
+	}
+
+	if len(episodes) > 0 {
+		if err := h.episodes.BulkCreate(episodes); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"episodes": episodes})
 }

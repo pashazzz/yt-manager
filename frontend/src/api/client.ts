@@ -3,6 +3,7 @@ import type {
   ShowDetail,
   Section,
   SectionShows,
+  Episode,
   CreateShowResponse,
   ProgressResponse,
 } from '../types'
@@ -34,10 +35,10 @@ export const api = {
 
   // ── Шоу ──────────────────────────────────────────────────────────────────
   getShows: () => request<Show[]>('/shows'),
-  createShow: (playlistUrl: string, sectionId: string) =>
+  createShow: (playlistUrl: string, sectionId: string, title?: string) =>
     request<CreateShowResponse>('/shows', {
       method: 'POST',
-      body: JSON.stringify({ playlistUrl, sectionId }),
+      body: JSON.stringify({ playlistUrl, sectionId, title }),
     }),
   getShow: (id: string) => request<ShowDetail>(`/shows/${id}`),
   deleteShow: (id: string) => request<void>(`/shows/${id}`, { method: 'DELETE' }),
@@ -45,6 +46,16 @@ export const api = {
     request<{ id: string; sectionId: string }>(`/shows/${id}/section`, {
       method: 'PATCH',
       body: JSON.stringify({ sectionId }),
+    }),
+  updateReverseOrder: (id: string, reverseOrder: boolean) =>
+    request<{ id: string; reverseOrder: boolean }>(`/shows/${id}/reverse`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reverseOrder }),
+    }),
+  addEpisode: (showId: string, url: string) =>
+    request<{ episodes: Episode[] }>(`/shows/${showId}/episodes`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
     }),
 
   // ── Эпизоды ──────────────────────────────────────────────────────────────

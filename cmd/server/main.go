@@ -80,6 +80,8 @@ func main() {
 		api.GET("/shows/:id", showHandler.GetShow)
 		api.DELETE("/shows/:id", showHandler.DeleteShow)
 		api.PATCH("/shows/:id/section", showHandler.MoveShow)
+		api.PATCH("/shows/:id/reverse", showHandler.ReverseShow)
+		api.POST("/shows/:id/episodes", showHandler.AddEpisode)
 
 		// Эпизоды
 		api.POST("/episodes/:id/progress", episodeHandler.SaveProgress)

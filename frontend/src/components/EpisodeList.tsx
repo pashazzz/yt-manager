@@ -4,6 +4,7 @@ interface Props {
   episodes: Episode[]
   currentId: string
   onSelect: (episode: Episode) => void
+  onAddVideo?: () => void
 }
 
 function fmtDuration(sec: number): string {
@@ -19,7 +20,7 @@ function thumbUrl(videoId: string) {
   return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
 }
 
-export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
+export default function EpisodeList({ episodes, currentId, onSelect, onAddVideo }: Props) {
   const watchedCount = episodes.filter(e => e.isWatched).length
 
   return (
@@ -68,6 +69,13 @@ export default function EpisodeList({ episodes, currentId, onSelect }: Props) {
             </div>
           )
         })}
+        {onAddVideo && (
+            <div className="episode-list-add" style={{ padding: '10px' }}>
+              <button className="btn-ghost" style={{ width: '100%', fontSize: '0.85rem' }} onClick={onAddVideo}>
+                + Добавить видео
+              </button>
+            </div>
+        )}
       </div>
     </aside>
   )

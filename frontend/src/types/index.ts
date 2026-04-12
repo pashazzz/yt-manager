@@ -4,6 +4,7 @@ export interface Show {
   playlistUrl: string
   ownerId: string
   sectionId: string
+  reverseOrder: boolean
   createdAt: string
 }
 

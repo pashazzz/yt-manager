@@ -31,9 +31,10 @@ func (r *ShowRepo) Create(s *models.Show) error {
 		"_id":         s.ID,
 		"title":       s.Title,
 		"playlistUrl": s.PlaylistURL,
-		"ownerId":     s.OwnerID,
-		"sectionId":   s.SectionID,
-		"createdAt":   s.CreatedAt,
+		"ownerId":      s.OwnerID,
+		"sectionId":    s.SectionID,
+		"reverseOrder": s.ReverseOrder,
+		"createdAt":    s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionShows, doc)
 }
@@ -98,6 +99,12 @@ func (r *ShowRepo) UpdateSection(id, sectionID string) error {
 	return r.db.Update(q, map[string]any{"sectionId": sectionID})
 }
 
+// UpdateReverseOrder меняет порядок сортировки эпизодов.
+func (r *ShowRepo) UpdateReverseOrder(id string, reversed bool) error {
+	q := query.NewQuery(db.CollectionShows).Where(query.Field("_id").Eq(id))
+	return r.db.Update(q, map[string]any{"reverseOrder": reversed})
+}
+
 // Delete удаляет шоу по ID.
 func (r *ShowRepo) Delete(id string) error {
 	return r.db.Delete(
@@ -110,16 +117,22 @@ func (r *ShowRepo) Delete(id string) error {
 func docToShow(d *document.Document) *models.Show {
 	createdAt, _ := d.Get("createdAt").(time.Time)
 	return &models.Show{
-		ID:          d.ObjectId(),
-		Title:       stringField(d, "title"),
-		PlaylistURL: stringField(d, "playlistUrl"),
-		OwnerID:     stringField(d, "ownerId"),
-		SectionID:   stringField(d, "sectionId"),
-		CreatedAt:   createdAt,
+		ID:           d.ObjectId(),
+		Title:        stringField(d, "title"),
+		PlaylistURL:  stringField(d, "playlistUrl"),
+		OwnerID:      stringField(d, "ownerId"),
+		SectionID:    stringField(d, "sectionId"),
+		ReverseOrder: showBoolField(d, "reverseOrder"),
+		CreatedAt:    createdAt,
 	}
 }
 
 func stringField(d *document.Document, key string) string {
 	v, _ := d.Get(key).(string)
+	return v
+}
+
+func showBoolField(d *document.Document, key string) bool {
+	v, _ := d.Get(key).(bool)
 	return v
 }

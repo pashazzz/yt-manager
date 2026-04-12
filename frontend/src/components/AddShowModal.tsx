@@ -10,7 +10,9 @@ interface Props {
 }
 
 export default function AddShowModal({ sections, defaultSectionId, onCreated, onClose }: Props) {
+  const [isCustom, setIsCustom] = useState(false)
   const [url, setUrl] = useState('')
+  const [title, setTitle] = useState('')
   const [sectionId, setSectionId] = useState(defaultSectionId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -18,13 +20,16 @@ export default function AddShowModal({ sections, defaultSectionId, onCreated, on
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const trimmed = url.trim()
-    if (!trimmed) return
+    const reqUrl = isCustom ? '' : url.trim()
+    const reqTitle = isCustom ? title.trim() : ''
+
+    if (!isCustom && !reqUrl) return
+    if (isCustom && !reqTitle) return
 
     setError('')
     setLoading(true)
     try {
-      const res = await api.createShow(trimmed, sectionId)
+      const res = await api.createShow(reqUrl, sectionId, reqTitle)
       onCreated(res.show)
       onClose()
     } catch (err: unknown) {
@@ -47,17 +52,34 @@ export default function AddShowModal({ sections, defaultSectionId, onCreated, on
           На большие плейлисты может уйти до минуты.
         </div>
 
+        <div className="modal-tabs" style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <button type="button" className={`btn-ghost ${!isCustom ? 'active' : ''}`} onClick={() => setIsCustom(false)}>По ссылке</button>
+          <button type="button" className={`btn-ghost ${isCustom ? 'active' : ''}`} onClick={() => setIsCustom(true)}>Пустое шоу</button>
+        </div>
+
         <form onSubmit={handleSubmit}>
-          <input
-            ref={inputRef}
-            className="modal-input"
-            type="url"
-            placeholder="https://youtube.com/playlist?list=…"
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            disabled={loading}
-            autoFocus
-          />
+          {!isCustom ? (
+            <input
+              ref={inputRef}
+              className="modal-input"
+              type="url"
+              placeholder="https://youtube.com/playlist?list=…"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              disabled={loading}
+              autoFocus
+            />
+          ) : (
+            <input
+              className="modal-input"
+              type="text"
+              placeholder="Название шоу"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              disabled={loading}
+              autoFocus
+            />
+          )}
 
           {sections.length > 1 && (
             <div className="modal-field">
@@ -89,7 +111,7 @@ export default function AddShowModal({ sections, defaultSectionId, onCreated, on
             <button type="button" className="btn-ghost" onClick={onClose} disabled={loading}>
               Отмена
             </button>
-            <button type="submit" className="btn-primary" disabled={loading || !url.trim()}>
+            <button type="submit" className="btn-primary" disabled={loading || (isCustom ? !title.trim() : !url.trim())}>
               {loading ? 'Загружаем…' : 'Добавить'}
             </button>
           </div>

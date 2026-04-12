@@ -21,6 +21,9 @@ type PlaylistEntry struct {
 type PlaylistInfo struct {
 	Title   string          `json:"title"`
 	Entries []PlaylistEntry `json:"entries"`
+	// Поля для парсинга одиночного видео
+	ID       string  `json:"id"`
+	Duration float64 `json:"duration"`
 }
 
 // Client — обёртка над yt-dlp, которая отвечает за получение метаданных.
@@ -64,6 +67,16 @@ func (c *Client) FetchPlaylist(ctx context.Context, url string) (*PlaylistInfo, 
 	var info PlaylistInfo
 	if err := json.Unmarshal(out, &info); err != nil {
 		return nil, fmt.Errorf("failed to parse yt-dlp output: %w", err)
+	}
+
+	// Если yt-dlp вернул данные по одиночному видео (entries пустой, но есть ID).
+	if len(info.Entries) == 0 && info.ID != "" {
+		info.Entries = []PlaylistEntry{{
+			ID:       info.ID,
+			Title:    info.Title,
+			Duration: info.Duration,
+			URL:      url,
+		}}
 	}
 
 	return &info, nil
