@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+
 	"github.com/google/uuid"
 	clover "github.com/ostafen/clover/v2"
 	"github.com/ostafen/clover/v2/document"
@@ -52,8 +54,14 @@ func (r *EpisodeRepo) FindByID(id string) (*models.Episode, error) {
 	q := query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id))
 
 	doc, err := r.db.FindFirst(q)
-	if err != nil || doc == nil {
+	if err != nil {
+		if errors.Is(err, clover.ErrDocumentNotExist) {
+			return nil, nil
+		}
 		return nil, err
+	}
+	if doc == nil {
+		return nil, nil
 	}
 	return docToEpisode(doc), nil
 }

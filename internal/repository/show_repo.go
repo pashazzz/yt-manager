@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,8 +61,14 @@ func (r *ShowRepo) FindByID(id string) (*models.Show, error) {
 	q := query.NewQuery(db.CollectionShows).Where(query.Field("_id").Eq(id))
 
 	doc, err := r.db.FindFirst(q)
-	if err != nil || doc == nil {
+	if err != nil {
+		if errors.Is(err, clover.ErrDocumentNotExist) {
+			return nil, nil
+		}
 		return nil, err
+	}
+	if doc == nil {
+		return nil, nil
 	}
 	return docToShow(doc), nil
 }
