@@ -71,19 +71,19 @@ func main() {
 		// Разделы
 		api.GET("/sections", sectionHandler.ListSections)
 		api.POST("/sections", sectionHandler.CreateSection)
-		api.DELETE("/sections/:id", sectionHandler.DeleteSection)
+		api.POST("/sections/:id/delete", sectionHandler.DeleteSection)
 		api.GET("/sections/:id/shows", sectionHandler.ListShowsBySection)
-		api.PATCH("/sections/reorder", sectionHandler.ReorderSections)
+		api.POST("/sections/reorder", sectionHandler.ReorderSections)
 
 		// Шоу
 		api.POST("/shows", showHandler.CreateShow)
 		api.GET("/shows", showHandler.ListShows)
 		api.GET("/shows/:id", showHandler.GetShow)
-		api.DELETE("/shows/:id", showHandler.DeleteShow)
-		api.PATCH("/shows/:id/section", showHandler.MoveShow)
-		api.PATCH("/shows/:id/reverse", showHandler.ReverseShow)
+		api.POST("/shows/:id/delete", showHandler.DeleteShow)
+		api.POST("/shows/:id/section", showHandler.MoveShow)
+		api.POST("/shows/:id/reverse", showHandler.ReverseShow)
 		api.POST("/shows/:id/episodes", showHandler.AddEpisode)
-		api.PATCH("/shows/:id/episodes/reorder", showHandler.ReorderEpisodes)
+		api.POST("/shows/:id/episodes/reorder", showHandler.ReorderEpisodes)
 
 		// Эпизоды
 		api.POST("/episodes/:id/progress", episodeHandler.SaveProgress)

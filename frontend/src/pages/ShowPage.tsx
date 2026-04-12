@@ -114,7 +114,7 @@ export default function ShowPage() {
     <div className="show-page">
       {/* ── Header ── */}
       <header className="show-page-header">
-        <button className="btn-back" onClick={() => navigate('/')}>
+        <button className="btn-back" onClick={() => navigate(`/sections/${show.sectionId}`)}>
           ← Назад
         </button>
         <h1 className="show-page-title">{show.title}</h1>

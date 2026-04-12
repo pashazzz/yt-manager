@@ -31,10 +31,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
-  deleteSection: (id: string) => request<void>(`/sections/${id}`, { method: 'DELETE' }),
+  deleteSection: (id: string) => request<void>(`/sections/${id}/delete`, { method: 'POST' }),
   reorderSections: (orderedIds: string[]) =>
     request<void>('/sections/reorder', {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({ orderedIds }),
     }),
   getSectionShows: (id: string) =>
@@ -48,15 +48,15 @@ export const api = {
       body: JSON.stringify({ playlistUrl, sectionId, title }),
     }),
   getShow: (id: string) => request<ShowDetail>(`/shows/${id}`),
-  deleteShow: (id: string) => request<void>(`/shows/${id}`, { method: 'DELETE' }),
+  deleteShow: (id: string) => request<void>(`/shows/${id}/delete`, { method: 'POST' }),
   moveShow: (id: string, sectionId: string) =>
     request<{ id: string; sectionId: string }>(`/shows/${id}/section`, {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({ sectionId }),
     }),
   updateReverseOrder: (id: string, reverseOrder: boolean) =>
     request<{ id: string; reverseOrder: boolean }>(`/shows/${id}/reverse`, {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({ reverseOrder }),
     }),
   addEpisode: (showId: string, url: string) =>
@@ -66,7 +66,7 @@ export const api = {
     }),
   reorderEpisodes: (showId: string, orderedIds: string[]) =>
     request<void>(`/shows/${showId}/episodes/reorder`, {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({ orderedIds }),
     }),
 
