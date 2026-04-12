@@ -19,7 +19,7 @@ import (
 func main() {
 	// --- конфигурация через ENV ---
 	dataDir := envOr("DATA_DIR", "./data")
-	addr := envOr("ADDR", ":8080")
+	addr := envOr("ADDR", ":8090")
 
 	// --- база данных ---
 	database, err := db.Open(dataDir)

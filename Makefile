@@ -27,22 +27,22 @@ check: tidy vet
 # --- Для тестирования API вручную ---
 # Добавить плейлист (заменить LIST_ID на реальный ID)
 curl-add:
-	curl -s -X POST http://localhost:8080/api/v1/shows \
+	curl -s -X POST http://localhost:8090/api/v1/shows \
 		-H "Content-Type: application/json" \
 		-H "Tailscale-User-Login: dev@local" \
 		-H "Tailscale-User-Name: Dev User" \
 		-d '{"playlistUrl":"https://www.youtube.com/playlist?list=$(LIST_ID)"}' | jq
 
 curl-list:
-	curl -s http://localhost:8080/api/v1/shows \
+	curl -s http://localhost:8090/api/v1/shows \
 		-H "Tailscale-User-Login: dev@local" | jq
 
 curl-show:
-	curl -s http://localhost:8080/api/v1/shows/$(ID) \
+	curl -s http://localhost:8090/api/v1/shows/$(ID) \
 		-H "Tailscale-User-Login: dev@local" | jq
 
 curl-progress:
-	curl -s -X POST http://localhost:8080/api/v1/episodes/$(ID)/progress \
+	curl -s -X POST http://localhost:8090/api/v1/episodes/$(ID)/progress \
 		-H "Content-Type: application/json" \
 		-H "Tailscale-User-Login: dev@local" \
 		-d '{"currentTime":$(T),"isWatched":false}' | jq
