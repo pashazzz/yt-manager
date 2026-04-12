@@ -1,49 +1,103 @@
 import { useNavigate } from 'react-router-dom'
-import type { Show, Episode } from '../types'
+import { useState, useRef, useEffect } from 'react'
+import type { Show, Episode, Section } from '../types'
 
 interface Props {
   show: Show
   episodes: Episode[]
+  sections: Section[]
   onDelete: (id: string) => void
+  onMove: (showId: string, sectionId: string) => void
 }
 
 function thumbUrl(videoId: string | undefined) {
   return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : ''
 }
 
-export default function ShowCard({ show, episodes, onDelete }: Props) {
+export default function ShowCard({ show, episodes, sections, onDelete, onMove }: Props) {
   const navigate = useNavigate()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const firstEp = episodes[0]
   const watched = episodes.filter(e => e.isWatched).length
   const progress = episodes.length > 0 ? (watched / episodes.length) * 100 : 0
+
+  // Закрывать меню при клике снаружи
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (confirm(`Удалить «${show.title}»?`)) onDelete(show.id)
   }
 
+  const handleMenuToggle = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setMenuOpen(v => !v)
+  }
+
+  const handleMove = (e: React.MouseEvent, sectionId: string) => {
+    e.stopPropagation()
+    setMenuOpen(false)
+    onMove(show.id, sectionId)
+  }
+
+  const otherSections = sections.filter(s => s.id !== show.sectionId)
+
   return (
     <div className="show-card" onClick={() => navigate(`/shows/${show.id}`)}>
       <div className="show-card-thumb">
-        {firstEp && (
-          <img src={thumbUrl(firstEp.videoId)} alt={show.title} loading="lazy" />
-        )}
+        {firstEp && <img src={thumbUrl(firstEp.videoId)} alt={show.title} loading="lazy" />}
         <div className="show-card-overlay">
           <span className="btn-play-overlay">▶ Смотреть</span>
         </div>
       </div>
 
-      <button className="btn-delete-card" onClick={handleDelete} title="Удалить шоу">
-        ✕
-      </button>
+      {/* Кнопки управления */}
+      <div className="show-card-actions">
+        {otherSections.length > 0 && (
+          <div className="show-card-menu-wrap" ref={menuRef}>
+            <button
+              className="btn-card-action"
+              onClick={handleMenuToggle}
+              title="Переместить в раздел"
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <div className="show-card-menu">
+                <div className="show-card-menu-label">Переместить в</div>
+                {otherSections.map(s => (
+                  <button
+                    key={s.id}
+                    className="show-card-menu-item"
+                    onClick={e => handleMove(e, s.id)}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <button className="btn-card-action btn-card-delete" onClick={handleDelete} title="Удалить">
+          ✕
+        </button>
+      </div>
 
       <div className="show-card-info">
         <div className="show-card-title">{show.title}</div>
         <div className="show-card-meta">
           <span>{episodes.length} эп.</span>
-          {watched > 0 && (
-            <span className="badge-watched">{watched} просмотрено</span>
-          )}
+          {watched > 0 && <span className="badge-watched">{watched} просм.</span>}
         </div>
         {progress > 0 && (
           <div className="show-card-progress">

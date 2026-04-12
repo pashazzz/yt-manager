@@ -3,6 +3,7 @@ export interface Show {
   title: string
   playlistUrl: string
   ownerId: string
+  sectionId: string
   createdAt: string
 }
 
@@ -11,15 +12,28 @@ export interface Episode {
   showId: string
   videoId: string
   title: string
-  duration: number    // секунды
-  currentTime: number // прогресс в секундах
+  duration: number
+  currentTime: number
   isWatched: boolean
   orderIndex: number
+}
+
+export interface Section {
+  id: string
+  name: string
+  ownerId: string
+  isDefault: boolean
+  createdAt: string
 }
 
 export interface ShowDetail {
   show: Show
   episodes: Episode[]
+}
+
+export interface SectionShows {
+  section: Section
+  shows: Show[]
 }
 
 export interface CreateShowResponse {

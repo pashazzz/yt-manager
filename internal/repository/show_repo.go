@@ -22,7 +22,7 @@ func NewShowRepo(database *clover.DB) *ShowRepo {
 	return &ShowRepo{db: database}
 }
 
-// Create сохраняет новое шоу и возвращает его с заполненным ID.
+// Create сохраняет новое шоу с заполненным ID.
 func (r *ShowRepo) Create(s *models.Show) error {
 	s.ID = uuid.NewString()
 	s.CreatedAt = time.Now().UTC()
@@ -32,13 +32,13 @@ func (r *ShowRepo) Create(s *models.Show) error {
 		"title":       s.Title,
 		"playlistUrl": s.PlaylistURL,
 		"ownerId":     s.OwnerID,
+		"sectionId":   s.SectionID,
 		"createdAt":   s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionShows, doc)
 }
 
-// FindByOwner возвращает все шоу, принадлежащие профилю ownerID.
-// Сортировка: сначала новые.
+// FindByOwner возвращает все шоу профиля (для обратной совместимости).
 func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 	q := query.NewQuery(db.CollectionShows).
 		Where(query.Field("ownerId").Eq(ownerID)).
@@ -48,7 +48,6 @@ func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	shows := make([]*models.Show, 0, len(docs))
 	for _, d := range docs {
 		shows = append(shows, docToShow(d))
@@ -56,10 +55,30 @@ func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 	return shows, nil
 }
 
-// FindByID возвращает шоу по ID или nil, если не найдено.
+// FindBySection возвращает шоу, принадлежащие конкретному разделу.
+// Если includeUncategorized=true, также возвращает шоу без sectionId
+// (созданные до введения разделов) — используется для раздела Default.
+func (r *ShowRepo) FindBySection(ownerID, sectionID string, includeUncategorized bool) ([]*models.Show, error) {
+	// Загружаем все шоу профиля, фильтруем в Go — безопасно для pet-project
+	all, err := r.FindByOwner(ownerID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*models.Show, 0, len(all))
+	for _, s := range all {
+		if s.SectionID == sectionID {
+			result = append(result, s)
+		} else if includeUncategorized && s.SectionID == "" {
+			result = append(result, s)
+		}
+	}
+	return result, nil
+}
+
+// FindByID возвращает шоу по ID или nil.
 func (r *ShowRepo) FindByID(id string) (*models.Show, error) {
 	q := query.NewQuery(db.CollectionShows).Where(query.Field("_id").Eq(id))
-
 	doc, err := r.db.FindFirst(q)
 	if err != nil {
 		if errors.Is(err, clover.ErrDocumentNotExist) {
@@ -71,6 +90,12 @@ func (r *ShowRepo) FindByID(id string) (*models.Show, error) {
 		return nil, nil
 	}
 	return docToShow(doc), nil
+}
+
+// UpdateSection перемещает шоу в другой раздел.
+func (r *ShowRepo) UpdateSection(id, sectionID string) error {
+	q := query.NewQuery(db.CollectionShows).Where(query.Field("_id").Eq(id))
+	return r.db.Update(q, map[string]any{"sectionId": sectionID})
 }
 
 // Delete удаляет шоу по ID.
@@ -89,6 +114,7 @@ func docToShow(d *document.Document) *models.Show {
 		Title:       stringField(d, "title"),
 		PlaylistURL: stringField(d, "playlistUrl"),
 		OwnerID:     stringField(d, "ownerId"),
+		SectionID:   stringField(d, "sectionId"),
 		CreatedAt:   createdAt,
 	}
 }

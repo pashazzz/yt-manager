@@ -21,33 +21,33 @@ import (
 )
 
 func main() {
-	// --- конфигурация ---
 	dataDir := envOr("DATA_DIR", "./data")
 	addr := envOr("ADDR", ":8090")
 
-	// --- база данных ---
+	// --- БД ---
 	database, err := db.Open(dataDir)
 	if err != nil {
 		log.Fatalf("failed to open database: %v", err)
 	}
 	defer database.Close()
 
-	// --- репозитории ---
+	// --- Репозитории ---
 	profileRepo := repository.NewProfileRepo(database)
+	sectionRepo := repository.NewSectionRepo(database)
 	showRepo := repository.NewShowRepo(database)
 	episodeRepo := repository.NewEpisodeRepo(database)
 
-	// --- yt-dlp клиент ---
+	// --- yt-dlp ---
 	ctx := context.Background()
 	ytClient, err := ytdlp.NewClient(ctx)
 	if err != nil {
 		log.Fatalf("failed to initialise yt-dlp client: %v", err)
 	}
 
-	// --- HTTP-роутер ---
+	// --- Роутер ---
 	r := gin.Default()
 
-	// CORS для dev-режима (Vite на :5173)
+	// CORS для dev-окружения (Vite на :5173)
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Tailscale-User-Login, Tailscale-User-Name")
@@ -58,51 +58,53 @@ func main() {
 		c.Next()
 	})
 
-	// Middleware: профиль из Tailscale-заголовков
 	r.Use(middleware.Profile(profileRepo))
 
-	// --- API маршруты ---
-	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, ytClient)
+	// --- Хендлеры ---
+	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, sectionRepo, ytClient)
 	episodeHandler := handlers.NewEpisodeHandler(episodeRepo, showRepo)
+	sectionHandler := handlers.NewSectionHandler(sectionRepo, showRepo)
 
+	// --- Маршруты ---
 	api := r.Group("/api/v1")
 	{
+		// Разделы
+		api.GET("/sections", sectionHandler.ListSections)
+		api.POST("/sections", sectionHandler.CreateSection)
+		api.DELETE("/sections/:id", sectionHandler.DeleteSection)
+		api.GET("/sections/:id/shows", sectionHandler.ListShowsBySection)
+
+		// Шоу
 		api.POST("/shows", showHandler.CreateShow)
 		api.GET("/shows", showHandler.ListShows)
 		api.GET("/shows/:id", showHandler.GetShow)
 		api.DELETE("/shows/:id", showHandler.DeleteShow)
+		api.PATCH("/shows/:id/section", showHandler.MoveShow)
+
+		// Эпизоды
 		api.POST("/episodes/:id/progress", episodeHandler.SaveProgress)
 	}
 
-	// --- Раздача фронтенда (SPA) ---
-	// Embedded FS из internal/web/dist/ (собирается командой `make frontend`)
+	// --- SPA: раздача фронтенда ---
 	webFS := web.FS()
 	fileServer := http.FileServer(http.FS(webFS))
 
 	r.NoRoute(func(c *gin.Context) {
 		urlPath := c.Request.URL.Path
-
-		// /api/... без совпадения с роутами → 404 JSON
 		if strings.HasPrefix(urlPath, "/api/") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "api route not found"})
 			return
 		}
-
-		// Обрезаем ведущий слэш для fs.Stat
 		fsPath := strings.TrimPrefix(urlPath, "/")
-
-		// Если реальный файл существует (assets, favicon, …) — отдаём его
 		if _, err := iofs.Stat(webFS, fsPath); err == nil {
 			fileServer.ServeHTTP(c.Writer, c.Request)
 			return
 		}
-
-		// SPA fallback: любой «красивый» URL → index.html
 		c.Request.URL.Path = "/"
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 
-	// --- Graceful shutdown ---
+	// --- Запуск ---
 	srv := startServer(r, addr)
 	log.Printf("yt-manager listening on %s (data: %s)", addr, dataDir)
 

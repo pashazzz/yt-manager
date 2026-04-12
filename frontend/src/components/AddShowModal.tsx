@@ -1,14 +1,17 @@
 import { useState, useRef } from 'react'
 import { api } from '../api/client'
-import type { Show } from '../types'
+import type { Show, Section } from '../types'
 
 interface Props {
+  sections: Section[]
+  defaultSectionId: string
   onCreated: (show: Show) => void
   onClose: () => void
 }
 
-export default function AddShowModal({ onCreated, onClose }: Props) {
+export default function AddShowModal({ sections, defaultSectionId, onCreated, onClose }: Props) {
   const [url, setUrl] = useState('')
+  const [sectionId, setSectionId] = useState(defaultSectionId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -21,7 +24,7 @@ export default function AddShowModal({ onCreated, onClose }: Props) {
     setError('')
     setLoading(true)
     try {
-      const res = await api.createShow(trimmed)
+      const res = await api.createShow(trimmed, sectionId)
       onCreated(res.show)
       onClose()
     } catch (err: unknown) {
@@ -40,7 +43,7 @@ export default function AddShowModal({ onCreated, onClose }: Props) {
       <div className="modal">
         <div className="modal-title">Добавить плейлист</div>
         <div className="modal-subtitle">
-          Вставь ссылку на YouTube-плейлист — эпизоды загрузятся автоматически через&nbsp;yt-dlp.
+          Вставь ссылку на YouTube-плейлист — эпизоды загрузятся автоматически.
           На большие плейлисты может уйти до минуты.
         </div>
 
@@ -56,8 +59,25 @@ export default function AddShowModal({ onCreated, onClose }: Props) {
             autoFocus
           />
 
-          {error && <div className="modal-error">{error}</div>}
+          {sections.length > 1 && (
+            <div className="modal-field">
+              <label className="modal-label">Раздел</label>
+              <select
+                className="modal-select"
+                value={sectionId}
+                onChange={e => setSectionId(e.target.value)}
+                disabled={loading}
+              >
+                {sections.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}{s.isDefault ? ' (по умолчанию)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
+          {error && <div className="modal-error">{error}</div>}
           {loading && (
             <div className="modal-loading">
               <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} />

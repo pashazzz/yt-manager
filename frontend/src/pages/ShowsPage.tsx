@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Show, Episode } from '../types'
+import type { Show, Episode, Section } from '../types'
 import ShowCard from '../components/ShowCard'
 import AddShowModal from '../components/AddShowModal'
 
@@ -10,24 +11,39 @@ interface ShowWithEpisodes {
 }
 
 export default function ShowsPage() {
+  const { sectionId } = useParams<{ sectionId: string }>()
+  const navigate = useNavigate()
+
+  const [section, setSection] = useState<Section | null>(null)
   const [items, setItems] = useState<ShowWithEpisodes[]>([])
+  const [sections, setSections] = useState<Section[]>([]) // все разделы (для модалки и move)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
-    loadShows()
-  }, [])
+    if (!sectionId) return
+    load()
+  }, [sectionId])
 
-  async function loadShows() {
+  async function load() {
     try {
       setLoading(true)
-      const shows = await api.getShows()
-      // Загружаем эпизоды каждого шоу параллельно
-      const details = await Promise.all(
-        shows.map(s => api.getShow(s.id).catch(() => ({ show: s, episodes: [] }))),
+      const [sectionData, allSections] = await Promise.all([
+        api.getSectionShows(sectionId!),
+        api.getSections(),
+      ])
+      setSection(sectionData.section)
+      setSections(allSections)
+
+      // Загружаем эпизоды для каждого шоу (для прогресса на карточках)
+      const withEpisodes = await Promise.all(
+        sectionData.shows.map(async show => {
+          const detail = await api.getShow(show.id).catch(() => ({ show, episodes: [] }))
+          return { show: detail.show, episodes: detail.episodes }
+        }),
       )
-      setItems(details.map(d => ({ show: d.show, episodes: d.episodes })))
+      setItems(withEpisodes)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
     } finally {
@@ -36,9 +52,11 @@ export default function ShowsPage() {
   }
 
   const handleCreated = async (show: Show) => {
-    // Подгружаем эпизоды нового шоу
     const detail = await api.getShow(show.id).catch(() => ({ show, episodes: [] }))
-    setItems(prev => [{ show: detail.show, episodes: detail.episodes }, ...prev])
+    // Показываем шоу только если оно в текущем разделе
+    if (show.sectionId === sectionId) {
+      setItems(prev => [{ show: detail.show, episodes: detail.episodes }, ...prev])
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -50,27 +68,31 @@ export default function ShowsPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="page-loader">
-        <div className="spinner" />
-      </div>
-    )
+  const handleMove = async (showId: string, targetSectionId: string) => {
+    try {
+      await api.moveShow(showId, targetSectionId)
+      // Убираем шоу из текущего раздела
+      setItems(prev => prev.filter(i => i.show.id !== showId))
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка перемещения')
+    }
   }
 
-  if (error) {
-    return (
-      <div className="page-error">
-        <span>⚠ {error}</span>
-        <button className="btn-primary" onClick={loadShows}>Повторить</button>
-      </div>
-    )
-  }
+  const defaultSection = sections.find(s => s.isDefault)
+
+  if (loading) return <div className="page-loader"><div className="spinner" /></div>
+  if (error) return (
+    <div className="page-error">
+      <span>⚠ {error}</span>
+      <button className="btn-primary" onClick={() => navigate('/')}>← На главную</button>
+    </div>
+  )
 
   return (
     <div className="shows-page">
       <header className="app-header">
-        <span className="app-logo">▶ YT Manager</span>
+        <button className="btn-back-inline" onClick={() => navigate('/')}>← Разделы</button>
+        <span className="app-logo" style={{ fontSize: '1rem' }}>{section?.name}</span>
         <button className="btn-add" onClick={() => setShowModal(true)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -83,22 +105,26 @@ export default function ShowsPage() {
         {items.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🎬</div>
-            <h3>Пока нет ни одного шоу</h3>
-            <p>Добавь YouTube-плейлист, чтобы смотреть его как сериал с отслеживанием прогресса</p>
+            <h3>Раздел пуст</h3>
+            <p>Добавь YouTube-плейлист, чтобы смотреть его как сериал</p>
             <button className="btn-primary" onClick={() => setShowModal(true)}>
               Добавить первое шоу
             </button>
           </div>
         ) : (
           <>
-            <h2 className="shows-section-title">Мои шоу</h2>
+            <h2 className="shows-section-title">
+              Шоу · {items.length}
+            </h2>
             <div className="shows-grid">
               {items.map(({ show, episodes }) => (
                 <ShowCard
                   key={show.id}
                   show={show}
                   episodes={episodes}
+                  sections={sections}
                   onDelete={handleDelete}
+                  onMove={handleMove}
                 />
               ))}
             </div>
@@ -107,7 +133,12 @@ export default function ShowsPage() {
       </main>
 
       {showModal && (
-        <AddShowModal onCreated={handleCreated} onClose={() => setShowModal(false)} />
+        <AddShowModal
+          sections={sections}
+          defaultSectionId={sectionId ?? defaultSection?.id ?? ''}
+          onCreated={handleCreated}
+          onClose={() => setShowModal(false)}
+        />
       )}
     </div>
   )

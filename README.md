@@ -83,13 +83,23 @@ make build-all
 
 ## API
 
+### Разделы
+
+```
+GET    /api/v1/sections       — список разделов профиля (раздел Default создаётся автоматически)
+POST   /api/v1/sections       — создать новый раздел
+DELETE /api/v1/sections/:id   — удалить (все шоу внутри будут перемещены в Default)
+GET    /api/v1/sections/:id/shows — получить шоу выбранного раздела
+```
+
 ### Шоу
 
 ```
-POST   /api/v1/shows          — добавить плейлист (загружает эпизоды через yt-dlp)
-GET    /api/v1/shows          — список шоу текущего профиля
+POST   /api/v1/shows          — добавить плейлист (опционально {sectionId}, загружает из yt-dlp)
+GET    /api/v1/shows          — список шоу (legacy)
 GET    /api/v1/shows/:id      — шоу + список эпизодов
 DELETE /api/v1/shows/:id      — удалить шоу и все эпизоды
+PATCH  /api/v1/shows/:id/section — переместить шоу в другой раздел
 ```
 
 ### Эпизоды
