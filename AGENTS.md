@@ -12,10 +12,11 @@
 
 | Параметр | Значение |
 |---|---|
-| Язык | Go 1.25 |
+| Язык (backend) | Go 1.25 |
 | HTTP | Gin v1.12 |
 | БД | CloverDB v2 alpha (`github.com/ostafen/clover/v2 v2.0.0-alpha.3`) |
 | YouTube | yt-dlp binary через `github.com/lrstanley/go-ytdlp v1.3.5` |
+| Frontend | React 18 + Vite 5 + TypeScript |
 | Порт | `:8090` (ENV: `ADDR`) |
 | Данные | `./data/` (ENV: `DATA_DIR`) |
 
@@ -26,7 +27,7 @@
 ```
 yt-manager/
 ├── cmd/server/
-│   ├── main.go          # точка входа: DI-wiring, роутер, graceful shutdown
+│   ├── main.go          # точка входа: DI-wiring, роутер, SPA-сервер, graceful shutdown
 │   └── server.go        # startServer() — gin в отдельной горутине
 ├── internal/
 │   ├── db/
@@ -44,8 +45,30 @@ yt-manager/
 │   ├── handlers/
 │   │   ├── shows.go     # ShowHandler: POST/GET/DELETE /shows, GET /shows/:id
 │   │   └── episodes.go  # EpisodeHandler: POST /episodes/:id/progress
-│   └── middleware/
-│       └── profile.go   # Profile() — Tailscale-заголовки → gin.Context
+│   ├── middleware/
+│   │   └── profile.go   # Profile() — Tailscale-заголовки → gin.Context
+│   └── web/
+│       ├── embed.go     # //go:embed all:dist — встраивает фронтенд в бинарь
+│       └── dist/        # сюда Vite собирает фронтенд (gitignored, кроме .gitkeep)
+├── frontend/
+│   ├── src/
+│   │   ├── api/client.ts        # fetch-обёртки над всеми API эндпоинтами
+│   │   ├── types/index.ts       # TypeScript-типы (Show, Episode, ShowDetail, …)
+│   │   ├── components/
+│   │   │   ├── VideoPlayer.tsx  # YouTube IFrame + seekTo + heartbeat + мобильный overlay
+│   │   │   ├── EpisodeList.tsx  # Сайдбар со списком эпизодов
+│   │   │   ├── ShowCard.tsx     # Карточка шоу с прогрессом
+│   │   │   └── AddShowModal.tsx # Модалка добавления плейлиста
+│   │   ├── pages/
+│   │   │   ├── ShowsPage.tsx    # Главная: сетка шоу
+│   │   │   └── ShowPage.tsx     # Страница просмотра: плеер + сайдбар
+│   │   ├── App.tsx              # React Router: / и /shows/:id
+│   │   ├── main.tsx             # точка входа React
+│   │   └── index.css            # design system (CSS custom properties)
+│   ├── public/
+│   │   └── icon.svg             # favicon
+│   ├── vite.config.ts           # outDir: ../internal/web/dist
+│   └── package.json
 ├── AGENTS.md
 ├── Makefile
 ├── README.md
@@ -55,23 +78,26 @@ yt-manager/
 
 ---
 
-## Команды сборки и запуска
+## Команды
 
 ```bash
-# Загрузить зависимости (всегда первый шаг после изменений go.mod)
-go mod tidy
+# Разработка (два терминала)
+go run ./cmd/server                    # бэкенд на :8090
+cd frontend && npm run dev             # фронтенд на :5173 с прокси → :8090
 
-# Запустить сервер для разработки
-go run ./cmd/server
+# Production-сборка (один бинарь)
+make build-all                         # фронт → internal/web/dist/ + go build
 
-# Скомпилировать бинарь в ./bin/yt-manager
-make build
+# Отдельно
+make frontend                          # только npm build
+make build                             # только go build
 
-# Статический анализ
+# Проверки
+make check                             # go mod tidy + go vet
 go vet ./...
 
-# Полная проверка (tidy + vet)
-make check
+# Чистка
+make clean                             # удаляет bin/, data/, сбрасывает dist/
 ```
 
 > **Тестов нет** (пока). Для проверки используй `curl`-команды из `Makefile`
@@ -90,6 +116,26 @@ make check
 | `GET` | `/shows/:id` | Шоу + его эпизоды |
 | `DELETE` | `/shows/:id` | Удалить шоу и все эпизоды |
 | `POST` | `/episodes/:id/progress` | Сохранить позицию просмотра |
+
+---
+
+## Как работает раздача фронтенда
+
+```
+npm run build  →  internal/web/dist/   (//go:embed all:dist в internal/web/embed.go)
+                        ↓
+go build       →  bin/yt-manager  ←  фронт встроен в бинарь
+```
+
+- Gin раздаёт статику через `http.FileServer(http.FS(webFS))`
+- Все пути, NOT начинающиеся с `/api/`, → `index.html` (SPA fallback)
+- В dev-режиме Vite-сервер (`:5173`) проксирует `/api` → `:8090`
+- `internal/web/dist/.gitkeep` обязательно должен оставаться в репозитории — иначе `go build` упадёт из-за пустой `//go:embed all:dist`
+
+### Добавление новой API-группы
+
+1. Зарегистрируй маршруты в `cmd/server/main.go` с префиксом `/api/v1/...`
+2. Фронтенд после этого автоматически не будет перехватывать этот путь (SPA-фолбек применяется только если нет реального файла)
 
 ---
 
@@ -195,7 +241,7 @@ if show == nil || show.OwnerID != profile.ID {
 info, err := h.ytClient.FetchPlaylist(c.Request.Context(), url)
 ```
 
-### 6. Новые коллекции
+### 6. Новые коллекции (backend)
 
 При добавлении новой модели:
 1. Добавь константу в `internal/db/db.go` (`CollectionXxx = "xxx"`).
@@ -203,16 +249,30 @@ info, err := h.ytClient.FetchPlaylist(c.Request.Context(), url)
 3. Создай файл `internal/repository/xxx_repo.go`.
 4. Добавь репо в `cmd/server/main.go`.
 
+### 7. Новые страницы (frontend)
+
+1. Добавь новый компонент в `frontend/src/pages/`.
+2. Зарегистрируй роут в `frontend/src/App.tsx`.
+3. Новые API-методы добавляй в `frontend/src/api/client.ts`.
+4. CSS-классы — в `frontend/src/index.css` (дизайн-система на CSS custom properties).
+
 ---
 
 ## Стиль кода
 
+### Go
 - **Форматирование**: `gofmt` / `goimports`. Не коммить неформатированный код.
 - **Именование**: Go-конвенции (`camelCase` для методов, `PascalCase` для экспортируемого).
 - **Ошибки**: всегда оборачивай через `fmt.Errorf("context: %w", err)`.
 - **Логирование**: используй стандартный `log` пакет (не `fmt.Println`).
 - **Комментарии к экспортируемым символам**: обязательны в формате `// FuncName ...`.
 - **Нет глобальных переменных** — всё передаётся через dependency injection.
+
+### TypeScript / React
+- **Компоненты**: один файл = один компонент, PascalCase имена файлов.
+- **Стили**: только через CSS-классы из `index.css`. Никакого inline-style кроме динамических значений (`width: \`${progress}%\``).
+- **API-вызовы**: только через `src/api/client.ts`, не `fetch` напрямую в компонентах.
+- **Типы**: все типы данных в `src/types/index.ts`.
 
 ---
 
@@ -240,8 +300,21 @@ info, err := h.ytClient.FetchPlaylist(c.Request.Context(), url)
 - Сам yt-dlp вызывается через `exec.CommandContext` с флагами `--flat-playlist --dump-single-json`.
 - Если плейлист приватный или yt-dlp не установлен — хендлер вернёт `502 Bad Gateway`.
 
+### //go:embed и пустой dist/
+
+- `internal/web/dist/.gitkeep` **обязателен** в репозитории.
+- Без него `go build` падает: `//go:embed all:dist` не может встроить несуществующую директорию.
+- После `make clean` `.gitkeep` восстанавливается автоматически.
+
 ### Tailscale headers в dev-режиме
 
 - Вне Tailscale заголовки отсутствуют → middleware подставляет `dev@local`.
 - В продакшне через `tailscale serve` заголовки добавляются автоматически.
 - Не задавай фиктивные заголовки в продакшн-окружении.
+
+### VideoPlayer — мобильные устройства
+
+- `playsinline: 1` в `playerVars` обязателен, иначе iOS открывает видео в системном плеере.
+- На мобильных показывается overlay «Начать просмотр» — первый тап выступает user gesture для автоплея.
+- Heartbeat (10 сек) стартует только после первого `onPlay` события.
+- При размонтировании компонента (`useEffect` cleanup) используется `navigator.sendBeacon` для сохранения последней позиции без блокировки навигации.

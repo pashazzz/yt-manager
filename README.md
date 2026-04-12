@@ -1,48 +1,77 @@
 # yt-manager
 
-Сервис для просмотра YouTube-плейлистов как сериалов с отслеживанием прогресса.
+Сервис для просмотра YouTube-плейлистов как сериалов с отслеживанием прогресса и синхронизацией через Tailscale.
 
 ## Стек
 
 | Слой | Технология |
 |------|-----------|
-| Backend | Go 1.22 |
-| БД | CloverDB v2 (встраиваемая NoSQL) |
-| HTTP | Gin |
+| Backend | Go 1.25, Gin v1.12 |
+| БД | CloverDB v2 alpha |
 | YouTube | yt-dlp via go-ytdlp |
-| Auth | Tailscale (заголовки `Tailscale-User-*`) |
+| Frontend | React 18 + Vite + TypeScript |
+| Auth | Tailscale (`Tailscale-User-*` заголовки) |
 
 ## Структура
 
 ```
 yt-manager/
 ├── cmd/server/
-│   ├── main.go          # точка входа, wiring зависимостей
-│   └── server.go        # graceful HTTP-сервер
+│   ├── main.go          # точка входа, DI, SPA-сервер
+│   └── server.go        # HTTP-сервер с graceful shutdown
 ├── internal/
 │   ├── db/db.go         # инициализация CloverDB
 │   ├── models/          # Profile, Show, Episode
-│   ├── repository/      # CRUD-операции для каждой модели
+│   ├── repository/      # CRUD для каждой модели
 │   ├── ytdlp/           # обёртка над yt-dlp binary
 │   ├── handlers/        # HTTP-хендлеры (shows, episodes)
-│   └── middleware/      # извлечение профиля из Tailscale-заголовков
-└── go.mod
+│   ├── middleware/       # Tailscale → Profile
+│   └── web/
+│       ├── embed.go     # //go:embed all:dist — встраивает фронтенд
+│       └── dist/        # сюда Vite кладёт билд (gitignored, кроме .gitkeep)
+└── frontend/            # React-приложение
+    ├── src/
+    │   ├── api/         # fetch-обёртки
+    │   ├── components/  # ShowCard, EpisodeList, VideoPlayer, AddShowModal
+    │   ├── pages/       # ShowsPage, ShowPage
+    │   └── types/       # TypeScript-типы
+    └── vite.config.ts   # outDir → ../internal/web/dist
 ```
 
 ## Быстрый старт
 
+### Разработка (два терминала)
+
 ```bash
-# 1. Установить зависимости
-go mod tidy
-
-# 2. Убедиться, что yt-dlp доступен (или он будет скачан автоматически)
-which yt-dlp   # macOS: brew install yt-dlp
-
-# 3. Запустить сервер
+# Терминал 1 — бэкенд
 go run ./cmd/server
 
-# Сервер слушает :8090, данные хранятся в ./data/
+# Терминал 2 — фронтенд с hot-reload (прокси на :8090)
+cd frontend && npm install && npm run dev
+# → открой http://localhost:5173
 ```
+
+### Production (один бинарь)
+
+```bash
+# 1. Собрать фронтенд и бэкенд
+make build-all
+
+# 2. Запустить
+./bin/yt-manager
+# → http://localhost:8090
+```
+
+## Команды
+
+| Команда | Описание |
+|---------|---------|
+| `make run` | Запустить бэкенд (с уже собранным фронтом) |
+| `make frontend` | npm install + vite build → internal/web/dist/ |
+| `make frontend-dev` | Vite dev-сервер на :5173 |
+| `make build-all` | Фронт + Go бинарь в ./bin/yt-manager |
+| `make check` | go mod tidy + go vet |
+| `make clean` | Удалить bin/, data/, сбросить dist/ |
 
 ## Переменные окружения
 
@@ -50,6 +79,7 @@ go run ./cmd/server
 |-----------|-------------|---------|
 | `ADDR` | `:8090` | Адрес и порт сервера |
 | `DATA_DIR` | `./data` | Директория для файлов БД |
+| `GIN_MODE` | `debug` | `release` для продакшна |
 
 ## API
 
@@ -68,33 +98,35 @@ DELETE /api/v1/shows/:id      — удалить шоу и все эпизоды
 POST   /api/v1/episodes/:id/progress — сохранить позицию просмотра
 ```
 
-## Примеры запросов (curl)
+## Как раздаётся фронтенд
 
-```bash
-# Добавить плейлист
-curl -X POST http://localhost:8090/api/v1/shows \
-  -H "Content-Type: application/json" \
-  -H "Tailscale-User-Login: me@example.com" \
-  -H "Tailscale-User-Name: Me" \
-  -d '{"playlistUrl": "https://www.youtube.com/playlist?list=PLxxxxxx"}'
-
-# Список шоу
-curl http://localhost:8090/api/v1/shows \
-  -H "Tailscale-User-Login: me@example.com"
-
-# Эпизоды шоу
-curl http://localhost:8090/api/v1/shows/<show-id> \
-  -H "Tailscale-User-Login: me@example.com"
-
-# Сохранить прогресс (на 95-й секунде, не досмотрено)
-curl -X POST http://localhost:8090/api/v1/episodes/<episode-id>/progress \
-  -H "Content-Type: application/json" \
-  -H "Tailscale-User-Login: me@example.com" \
-  -d '{"currentTime": 95.0, "isWatched": false}'
 ```
+npm run build  ─→  internal/web/dist/   (//go:embed all:dist)
+                          ↓
+go build       ─→  bin/yt-manager  ←  фронт встроен в бинарь
+```
+
+Gin раздаёт статику через `http.FileServer(http.FS(webFS))`.  
+Все маршруты, не начинающиеся с `/api/`, получают `index.html` (SPA fallback).  
+В dev-режиме Vite проксирует `/api` → `:8090` напрямую.
 
 ## Идентификация через Tailscale
 
-При работе через `tailscale serve` / `tailscale funnel` Tailscale автоматически
-добавляет заголовки `Tailscale-User-Login` и `Tailscale-User-Name`.  
-В dev-режиме (вне Tailscale) middleware подставляет `dev@local` как заглушку.
+При работе через `tailscale serve` Tailscale добавляет заголовки автоматически.  
+Для локальной разработки middleware подставляет `dev@local` как заглушку.
+
+## Примеры curl
+
+```bash
+# Добавить плейлист
+make curl-add LIST_ID=PLxxxxxx
+
+# Список шоу
+make curl-list
+
+# Эпизоды шоу
+make curl-show ID=<show-id>
+
+# Сохранить прогресс
+make curl-progress ID=<episode-id> T=95
+```

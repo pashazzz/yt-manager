@@ -1,14 +1,16 @@
-.PHONY: run build tidy lint clean
+.PHONY: run build tidy vet check frontend build-all clean
 
-# Запустить сервер в режиме разработки
+# ─── Backend ──────────────────────────────────────────────────────────────────
+
+# Запустить сервер (фронт раздаётся из internal/web/dist/)
 run:
 	go run ./cmd/server
 
-# Скомпилировать бинарь
+# Скомпилировать бинарь в ./bin/yt-manager
 build:
 	go build -o bin/yt-manager ./cmd/server
 
-# Загрузить и проверить все зависимости
+# Загрузить и привести в порядок зависимости
 tidy:
 	go mod tidy
 
@@ -16,16 +18,35 @@ tidy:
 vet:
 	go vet ./...
 
-# Удалить скомпилированные артефакты
-clean:
-	rm -rf bin/ data/
-
-# Быстрая проверка компиляции без запуска
+# Полная проверка: tidy + vet
 check: tidy vet
-	@echo "✓ all checks passed"
+	@echo "✓ backend checks passed"
 
-# --- Для тестирования API вручную ---
-# Добавить плейлист (заменить LIST_ID на реальный ID)
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+
+# Установить npm-зависимости и собрать фронтенд → internal/web/dist/
+frontend:
+	cd frontend && npm install && npm run build
+
+# Запустить Vite dev-сервер (порт 5173, прокси на :8090)
+frontend-dev:
+	cd frontend && npm run dev
+
+# ─── Combined ─────────────────────────────────────────────────────────────────
+
+# Собрать всё: фронт + бинарь (production)
+build-all: frontend build
+	@echo "✓ build-all complete → bin/yt-manager"
+
+# ─── Cleanup ──────────────────────────────────────────────────────────────────
+
+clean:
+	rm -rf bin/ data/ internal/web/dist/*
+	touch internal/web/dist/.gitkeep
+
+# ─── API smoke tests (curl) ───────────────────────────────────────────────────
+
+# make curl-add LIST_ID=PLxxxxxx
 curl-add:
 	curl -s -X POST http://localhost:8090/api/v1/shows \
 		-H "Content-Type: application/json" \
@@ -37,10 +58,12 @@ curl-list:
 	curl -s http://localhost:8090/api/v1/shows \
 		-H "Tailscale-User-Login: dev@local" | jq
 
+# make curl-show ID=<show-id>
 curl-show:
 	curl -s http://localhost:8090/api/v1/shows/$(ID) \
 		-H "Tailscale-User-Login: dev@local" | jq
 
+# make curl-progress ID=<episode-id> T=95
 curl-progress:
 	curl -s -X POST http://localhost:8090/api/v1/episodes/$(ID)/progress \
 		-H "Content-Type: application/json" \

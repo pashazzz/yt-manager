@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Складываем билд туда, где Go его подхватит через //go:embed
+    outDir: '../internal/web/dist',
+    emptyOutDir: true,
+  },
   server: {
     port: 5173,
     proxy: {

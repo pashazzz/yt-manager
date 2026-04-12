@@ -3,5 +3,10 @@ bin/
 *.log
 .DS_Store
 
-frontend/dist/
+# Frontend build artefacts
 frontend/node_modules/
+frontend/dist/
+
+# Go-embedded frontend build — всё кроме placeholder
+internal/web/dist/*
+!internal/web/dist/.gitkeep
