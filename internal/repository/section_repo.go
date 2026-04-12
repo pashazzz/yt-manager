@@ -28,11 +28,12 @@ func (r *SectionRepo) Create(s *models.Section) error {
 	s.CreatedAt = time.Now().UTC()
 
 	doc := document.NewDocumentOf(map[string]any{
-		"_id":       s.ID,
-		"name":      s.Name,
-		"ownerId":   s.OwnerID,
-		"isDefault": s.IsDefault,
-		"createdAt": s.CreatedAt,
+		"_id":        s.ID,
+		"name":       s.Name,
+		"ownerId":    s.OwnerID,
+		"isDefault":  s.IsDefault,
+		"orderIndex": s.OrderIndex,
+		"createdAt":  s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionSections, doc)
 }
@@ -41,7 +42,7 @@ func (r *SectionRepo) Create(s *models.Section) error {
 func (r *SectionRepo) FindByOwner(ownerID string) ([]*models.Section, error) {
 	q := query.NewQuery(db.CollectionSections).
 		Where(query.Field("ownerId").Eq(ownerID)).
-		Sort(query.SortOption{Field: "createdAt", Direction: 1})
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1}, query.SortOption{Field: "createdAt", Direction: 1})
 
 	docs, err := r.db.FindAll(q)
 	if err != nil {
@@ -98,13 +99,40 @@ func (r *SectionRepo) Delete(id string) error {
 	)
 }
 
+// UpdateOrder обновляет orderIndex для списка разделов.
+func (r *SectionRepo) UpdateOrder(ownerID string, orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		q := query.NewQuery(db.CollectionSections).Where(
+			query.Field("_id").Eq(id).And(query.Field("ownerId").Eq(ownerID)),
+		)
+		if err := r.db.Update(q, map[string]any{"orderIndex": i}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func docToSection(d *document.Document) *models.Section {
 	createdAt, _ := d.Get("createdAt").(time.Time)
 	return &models.Section{
-		ID:        d.ObjectId(),
-		Name:      stringField(d, "name"),
-		OwnerID:   stringField(d, "ownerId"),
-		IsDefault: boolField(d, "isDefault"),
-		CreatedAt: createdAt,
+		ID:         d.ObjectId(),
+		Name:       stringField(d, "name"),
+		OwnerID:    stringField(d, "ownerId"),
+		IsDefault:  boolField(d, "isDefault"),
+		OrderIndex: sectionIntField(d, "orderIndex"),
+		CreatedAt:  createdAt,
+	}
+}
+
+func sectionIntField(d *document.Document, key string) int {
+	switch v := d.Get(key).(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	case float32:
+		return int(v)
+	default:
+		return 0
 	}
 }

@@ -1,7 +1,34 @@
+import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Section } from '../types'
 import SectionCard from '../components/SectionCard'
+
+function SortableSection({ section, showCount, index, onDelete }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+    zIndex: isDragging ? 10 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab'
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <SectionCard
+        section={section}
+        showCount={showCount}
+        index={index}
+        onDelete={onDelete}
+      />
+    </div>
+  )
+}
+
 
 export default function SectionsPage() {
   const [sections, setSections] = useState<Section[]>([])
@@ -11,6 +38,14 @@ export default function SectionsPage() {
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  )
 
   useEffect(() => { load() }, [])
 
@@ -65,6 +100,20 @@ export default function SectionsPage() {
     }
   }
 
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      setSections(items => {
+        const oldIndex = items.findIndex(i => i.id === active.id)
+        const newIndex = items.findIndex(i => i.id === over.id)
+        const newItems = arrayMove(items, oldIndex, newIndex)
+        
+        api.reorderSections(newItems.map(i => i.id)).catch(console.error)
+        return newItems
+      })
+    }
+  }
+
   if (loading) return <div className="page-loader"><div className="spinner" /></div>
   if (error) return (
     <div className="page-error">
@@ -115,17 +164,21 @@ export default function SectionsPage() {
         ) : (
           <>
             <h2 className="shows-section-title">Разделы</h2>
-            <div className="sections-grid">
-              {sections.map((s, i) => (
-                <SectionCard
-                  key={s.id}
-                  section={s}
-                  showCount={showCounts[s.id] ?? 0}
-                  index={i}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={sections} strategy={rectSortingStrategy}>
+                <div className="sections-grid">
+                  {sections.map((s, i) => (
+                    <SortableSection
+                      key={s.id}
+                      section={s}
+                      showCount={showCounts[s.id] ?? 0}
+                      index={i}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           </>
         )}
       </main>

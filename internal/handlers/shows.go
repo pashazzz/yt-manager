@@ -288,6 +288,39 @@ func (h *ShowHandler) AddEpisode(c *gin.Context) {
 			return
 		}
 	}
-
 	c.JSON(http.StatusCreated, gin.H{"episodes": episodes})
+}
+
+// ReorderEpisodes godoc
+// PATCH /shows/:id/episodes/reorder
+// Body: { "orderedIds": ["id1", "id2"] }
+func (h *ShowHandler) ReorderEpisodes(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+	showID := c.Param("id")
+
+	var body struct {
+		OrderedIDs []string `json:"orderedIds" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	show, err := h.shows.FindByID(showID)
+	if err != nil || show == nil || show.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	if show.PlaylistURL != "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot reorder automatically managed episodes"})
+		return
+	}
+
+	if err := h.episodes.UpdateOrder(showID, body.OrderedIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusOK)
 }

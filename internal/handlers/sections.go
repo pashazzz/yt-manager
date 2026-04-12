@@ -103,6 +103,28 @@ func (h *SectionHandler) DeleteSection(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// ReorderSections godoc
+// PATCH /sections/reorder
+// Body: { "orderedIds": ["id1", "id2"] }
+func (h *SectionHandler) ReorderSections(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+
+	var body struct {
+		OrderedIDs []string `json:"orderedIds" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.sections.UpdateOrder(profile.ID, body.OrderedIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
 // ListShowsBySection godoc
 // GET /sections/:id/shows — шоу конкретного раздела.
 func (h *SectionHandler) ListShowsBySection(c *gin.Context) {

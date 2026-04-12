@@ -6,7 +6,8 @@ import "time"
 type Section struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
-	OwnerID   string    `json:"ownerId"`
-	IsDefault bool      `json:"isDefault"` // раздел «Default» создаётся автоматически
-	CreatedAt time.Time `json:"createdAt"`
+	OwnerID    string    `json:"ownerId"`
+	IsDefault  bool      `json:"isDefault"` // раздел «Default» создаётся автоматически
+	OrderIndex int       `json:"orderIndex"`
+	CreatedAt  time.Time `json:"createdAt"`
 }

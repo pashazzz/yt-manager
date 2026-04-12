@@ -101,6 +101,19 @@ func (r *EpisodeRepo) DeleteByShow(showID string) error {
 	)
 }
 
+// UpdateOrder обновляет orderIndex для списка эпизодов (используется для drag & drop в пользовательских плейлистах).
+func (r *EpisodeRepo) UpdateOrder(showID string, orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		q := query.NewQuery(db.CollectionEpisodes).Where(
+			query.Field("_id").Eq(id).And(query.Field("showId").Eq(showID)),
+		)
+		if err := r.db.Update(q, map[string]any{"orderIndex": i}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // --- helpers ---
 
 func episodeToDoc(ep *models.Episode) *document.Document {

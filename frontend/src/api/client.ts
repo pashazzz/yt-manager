@@ -27,9 +27,16 @@ export const api = {
   // ── Разделы ───────────────────────────────────────────────────────────────
   getSections: () => request<Section[]>('/sections'),
   createSection: (name: string) =>
-    request<Section>('/sections', { method: 'POST', body: JSON.stringify({ name }) }),
-  deleteSection: (id: string) =>
-    request<void>(`/sections/${id}`, { method: 'DELETE' }),
+    request<Section>('/sections', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  deleteSection: (id: string) => request<void>(`/sections/${id}`, { method: 'DELETE' }),
+  reorderSections: (orderedIds: string[]) =>
+    request<void>('/sections/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ orderedIds }),
+    }),
   getSectionShows: (id: string) =>
     request<SectionShows>(`/sections/${id}/shows`),
 
@@ -56,6 +63,11 @@ export const api = {
     request<{ episodes: Episode[] }>(`/shows/${showId}/episodes`, {
       method: 'POST',
       body: JSON.stringify({ url }),
+    }),
+  reorderEpisodes: (showId: string, orderedIds: string[]) =>
+    request<void>(`/shows/${showId}/episodes/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ orderedIds }),
     }),
 
   // ── Эпизоды ──────────────────────────────────────────────────────────────

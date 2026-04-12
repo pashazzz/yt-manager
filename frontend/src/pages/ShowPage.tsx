@@ -53,6 +53,17 @@ export default function ShowPage() {
     [],
   )
 
+  const handleToggleWatched = async (ep: Episode) => {
+    const newIsWatched = !ep.isWatched
+    const newTime = newIsWatched ? ep.duration : 0
+    try {
+      await api.saveProgress(ep.id, newTime, newIsWatched)
+      handleProgressSaved(ep.id, newTime, newIsWatched)
+    } catch {
+      // Ignored
+    }
+  }
+
   const handleToggleReverse = async () => {
     if (!show) return
     try {
@@ -72,6 +83,13 @@ export default function ShowPage() {
       setEpisodes(prev => [...prev, ...res.episodes])
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Ошибка добавления видео')
+    }
+  }
+
+  const handleReorder = (newEpisodes: Episode[]) => {
+    setEpisodes(newEpisodes)
+    if (show) {
+      api.reorderEpisodes(show.id, newEpisodes.map(e => e.id)).catch(console.error)
     }
   }
 
@@ -100,14 +118,16 @@ export default function ShowPage() {
           ← Назад
         </button>
         <h1 className="show-page-title">{show.title}</h1>
-        <button 
-          className="btn-ghost" 
-          onClick={handleToggleReverse}
-          title="Изменить порядок воспроизведения"
-          style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
-        >
-          {show.reverseOrder ? 'Сначала новые ▼' : 'Сначала старые ▲'}
-        </button>
+        {show.playlistUrl !== '' && (
+          <button 
+            className="btn-ghost" 
+            onClick={handleToggleReverse}
+            title="Изменить порядок воспроизведения"
+            style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
+          >
+            {show.reverseOrder ? 'Сначала новые ▼' : 'Сначала старые ▲'}
+          </button>
+        )}
       </header>
 
       <div className="show-page-body">
@@ -141,10 +161,13 @@ export default function ShowPage() {
 
         {/* ── Episode list ── */}
         <EpisodeList
-          episodes={show.reverseOrder ? [...episodes].reverse() : episodes}
+          episodes={show.playlistUrl === '' ? episodes : (show.reverseOrder ? [...episodes].reverse() : episodes)}
           currentId={currentEpisode?.id ?? ''}
           onSelect={setCurrentEpisode}
           onAddVideo={handleAddVideo}
+          onToggleWatched={handleToggleWatched}
+          isReorderable={show.playlistUrl === ''}
+          onReorder={handleReorder}
         />
       </div>
     </div>

@@ -24,6 +24,7 @@ export interface Section {
   name: string
   ownerId: string
   isDefault: boolean
+  orderIndex: number
   createdAt: string
 }
 

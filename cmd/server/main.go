@@ -73,6 +73,7 @@ func main() {
 		api.POST("/sections", sectionHandler.CreateSection)
 		api.DELETE("/sections/:id", sectionHandler.DeleteSection)
 		api.GET("/sections/:id/shows", sectionHandler.ListShowsBySection)
+		api.PATCH("/sections/reorder", sectionHandler.ReorderSections)
 
 		// Шоу
 		api.POST("/shows", showHandler.CreateShow)
@@ -82,6 +83,7 @@ func main() {
 		api.PATCH("/shows/:id/section", showHandler.MoveShow)
 		api.PATCH("/shows/:id/reverse", showHandler.ReverseShow)
 		api.POST("/shows/:id/episodes", showHandler.AddEpisode)
+		api.PATCH("/shows/:id/episodes/reorder", showHandler.ReorderEpisodes)
 
 		// Эпизоды
 		api.POST("/episodes/:id/progress", episodeHandler.SaveProgress)
