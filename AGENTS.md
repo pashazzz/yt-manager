@@ -126,13 +126,34 @@ if doc == nil {
 }
 ```
 
-**Кастомный `_id`** передаётся через ключ `"_id"` в map при создании документа:
+**Кастомный `_id`** должен быть **валидным UUID** (формат `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+CloverDB v2 alpha **отвергает любую другую строку** (email, slug и т.п.) с ошибкой `invalid _id: <value>`.
 
 ```go
+// ✅ правильно — UUID генерирует uuid.NewString()
 doc := document.NewDocumentOf(map[string]any{
-    "_id":   myUUID,   // CloverDB использует это как ObjectId
+    "_id":   uuid.NewString(), // или другой валидный UUID
     "field": value,
 })
+
+// ❌ неправильно — email не является UUID, будет ошибка
+doc := document.NewDocumentOf(map[string]any{
+    "_id": "user@example.com", // invalid _id!
+})
+```
+
+**Для моделей, где натуральный ключ не является UUID** (например, Tailscale-логин — это email),
+храни натуральный ключ в отдельном поле и делай lookup по нему:
+
+```go
+// Профиль: email хранится в поле "login", _id генерирует CloverDB
+doc := document.NewDocumentOf(map[string]any{
+    // "_id" не задаём — CloverDB сгенерирует валидный UUID автоматически
+    "login": profile.ID, // email из Tailscale-заголовка
+    "name":  profile.Name,
+})
+// Поиск по login, а не по _id:
+q := query.NewQuery(col).Where(query.Field("login").Eq(email))
 ```
 
 **Чтение полей** — CloverDB возвращает `interface{}`, всегда используй type assertion с проверкой:

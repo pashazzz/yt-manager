@@ -21,8 +21,10 @@ func NewProfileRepo(database *clover.DB) *ProfileRepo {
 }
 
 // Upsert создаёт профиль, если его ещё нет, иначе обновляет имя.
+// Profile.ID (email из Tailscale) хранится в поле "login", а не "_id",
+// чтобы не нарушать валидацию UUID-формата CloverDB.
 func (r *ProfileRepo) Upsert(p *models.Profile) error {
-	q := query.NewQuery(db.CollectionProfiles).Where(query.Field("_id").Eq(p.ID))
+	q := query.NewQuery(db.CollectionProfiles).Where(query.Field("login").Eq(p.ID))
 
 	existing, err := r.db.FindFirst(q)
 	if err != nil && !errors.Is(err, clover.ErrDocumentNotExist) {
@@ -30,9 +32,10 @@ func (r *ProfileRepo) Upsert(p *models.Profile) error {
 	}
 
 	if existing == nil {
+		// Не задаём "_id" — CloverDB сам сгенерирует валидный UUID.
 		doc := document.NewDocumentOf(map[string]any{
-			"_id":  p.ID,
-			"name": p.Name,
+			"login": p.ID,
+			"name":  p.Name,
 		})
 		return r.db.Insert(db.CollectionProfiles, doc)
 	}
@@ -40,9 +43,9 @@ func (r *ProfileRepo) Upsert(p *models.Profile) error {
 	return r.db.Update(q, map[string]any{"name": p.Name})
 }
 
-// FindByID возвращает профиль по ID или nil, если не найден.
+// FindByID возвращает профиль по Tailscale-логину (email) или nil.
 func (r *ProfileRepo) FindByID(id string) (*models.Profile, error) {
-	q := query.NewQuery(db.CollectionProfiles).Where(query.Field("_id").Eq(id))
+	q := query.NewQuery(db.CollectionProfiles).Where(query.Field("login").Eq(id))
 
 	doc, err := r.db.FindFirst(q)
 	if err != nil {
@@ -55,9 +58,10 @@ func (r *ProfileRepo) FindByID(id string) (*models.Profile, error) {
 		return nil, nil
 	}
 
+	login, _ := doc.Get("login").(string)
 	name, _ := doc.Get("name").(string)
 	return &models.Profile{
-		ID:   doc.ObjectId(),
+		ID:   login,
 		Name: name,
 	}, nil
 }
