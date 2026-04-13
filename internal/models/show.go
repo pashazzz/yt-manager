@@ -11,5 +11,6 @@ type Show struct {
 	SectionID    string    `json:"sectionId"` // к какому разделу принадлежит
 	ReverseOrder bool      `json:"reverseOrder"`
 	IsSingles    bool      `json:"isSingles"`
+	OrderIndex   int       `json:"orderIndex"`
 	CreatedAt    time.Time `json:"createdAt"`
 }

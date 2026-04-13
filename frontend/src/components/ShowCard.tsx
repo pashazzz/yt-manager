@@ -7,13 +7,16 @@ interface Props {
   sections: Section[]
   onDelete: (id: string) => void
   onMove: (showId: string, sectionId: string) => void
+  listeners?: any
+  setNodeRef?: (node: HTMLElement | null) => void
+  style?: React.CSSProperties
 }
 
 function thumbUrl(videoId: string | undefined) {
   return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : ''
 }
 
-export default function ShowCard({ show, episodes, sections, onDelete, onMove }: Props) {
+export default function ShowCard({ show, episodes, sections, onDelete, onMove, listeners, setNodeRef, style }: Props) {
   const navigate = useNavigate()
   const firstEp = episodes[0]
   const watched = episodes.filter(e => e.isWatched).length
@@ -35,8 +38,18 @@ export default function ShowCard({ show, episodes, sections, onDelete, onMove }:
   const otherSections = sections.filter(s => s.id !== show.sectionId)
 
   return (
-    <div className="show-card" onClick={() => navigate(`/shows/${show.id}`)}>
+    <div 
+      className="show-card" 
+      onClick={() => navigate(`/shows/${show.id}`)}
+      ref={setNodeRef}
+      style={style}
+    >
       <div className="show-card-thumb">
+        {listeners && (
+          <div className="show-card-drag-handle" {...listeners}>
+            ☰
+          </div>
+        )}
         {firstEp && <img src={thumbUrl(firstEp.videoId)} alt={show.title} loading="lazy" />}
         <div className="show-card-overlay">
           <span className="btn-play-overlay">▶ Смотреть</span>

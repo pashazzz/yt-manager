@@ -324,3 +324,33 @@ func (h *ShowHandler) ReorderEpisodes(c *gin.Context) {
 
 	c.Status(http.StatusOK)
 }
+
+// ReorderShows godoc
+// POST /shows/reorder
+// Body: { "sectionId": "uuid", "orderedIds": ["id1", "id2"] }
+func (h *ShowHandler) ReorderShows(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+
+	var body struct {
+		SectionID  string   `json:"sectionId" binding:"required"`
+		OrderedIDs []string `json:"orderedIds" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Проверяем права на раздел
+	sec, err := h.sections.FindByID(body.SectionID)
+	if err != nil || sec == nil || sec.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied to section"})
+		return
+	}
+
+	if err := h.shows.UpdateOrder(profile.ID, body.SectionID, body.OrderedIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusOK)
+}

@@ -2,6 +2,7 @@ import type {
   Show,
   ShowDetail,
   Section,
+  SectionInfo,
   SectionShows,
   Episode,
   CreateShowResponse,
@@ -25,7 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   // ── Разделы ───────────────────────────────────────────────────────────────
-  getSections: () => request<Section[]>('/sections'),
+  getSections: () => request<SectionInfo[]>('/sections'),
   createSection: (name: string) =>
     request<Section>('/sections', {
       method: 'POST',
@@ -37,6 +38,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ orderedIds }),
     }),
+  updateSectionSettings: (id: string, useThumb: boolean) =>
+    request<void>(`/sections/${id}/settings`, {
+      method: 'POST',
+      body: JSON.stringify({ useThumb }),
+    }),
   getSectionShows: (id: string) =>
     request<SectionShows>(`/sections/${id}/shows`),
 
@@ -46,6 +52,11 @@ export const api = {
     request<CreateShowResponse>('/shows', {
       method: 'POST',
       body: JSON.stringify({ playlistUrl, sectionId, title }),
+    }),
+  reorderShows: (sectionId: string, orderedIds: string[]) =>
+    request<void>('/shows/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ sectionId, orderedIds }),
     }),
   getShow: (id: string) => request<ShowDetail>(`/shows/${id}`),
   deleteShow: (id: string) => request<void>(`/shows/${id}/delete`, { method: 'POST' }),

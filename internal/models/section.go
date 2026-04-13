@@ -9,5 +9,6 @@ type Section struct {
 	OwnerID    string    `json:"ownerId"`
 	IsDefault  bool      `json:"isDefault"` // раздел «Default» создаётся автоматически
 	OrderIndex int       `json:"orderIndex"`
+	UseThumb   bool      `json:"useThumb"`
 	CreatedAt  time.Time `json:"createdAt"`
 }

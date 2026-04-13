@@ -35,6 +35,7 @@ func (r *ShowRepo) Create(s *models.Show) error {
 		"sectionId":    s.SectionID,
 		"reverseOrder": s.ReverseOrder,
 		"isSingles":    s.IsSingles,
+		"orderIndex":   s.OrderIndex,
 		"createdAt":    s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionShows, doc)
@@ -44,7 +45,7 @@ func (r *ShowRepo) Create(s *models.Show) error {
 func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 	q := query.NewQuery(db.CollectionShows).
 		Where(query.Field("ownerId").Eq(ownerID)).
-		Sort(query.SortOption{Field: "createdAt", Direction: -1})
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1}, query.SortOption{Field: "createdAt", Direction: 1})
 
 	docs, err := r.db.FindAll(q)
 	if err != nil {
@@ -115,6 +116,22 @@ func (r *ShowRepo) Delete(id string) error {
 	)
 }
 
+// UpdateOrder обновляет orderIndex для списка шоу внутри раздела.
+func (r *ShowRepo) UpdateOrder(ownerID, sectionID string, orderedIDs []string) error {
+	for i, id := range orderedIDs {
+		// Мы проверяем и ownerId и sectionId для безопасности.
+		q := query.NewQuery(db.CollectionShows).Where(
+			query.Field("_id").Eq(id).
+				And(query.Field("ownerId").Eq(ownerID)).
+				And(query.Field("sectionId").Eq(sectionID)),
+		)
+		if err := r.db.Update(q, map[string]any{"orderIndex": i}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EnsureSinglesShow возвращает специальное скрытое шоу для отдельных видео раздела,
 // или создаёт его, если оно ещё не существует.
 func (r *ShowRepo) EnsureSinglesShow(ownerID, sectionID string) (*models.Show, error) {
@@ -155,6 +172,7 @@ func docToShow(d *document.Document) *models.Show {
 		SectionID:    stringField(d, "sectionId"),
 		ReverseOrder: showBoolField(d, "reverseOrder"),
 		IsSingles:    showBoolField(d, "isSingles"),
+		OrderIndex:   showIntField(d, "orderIndex"),
 		CreatedAt:    createdAt,
 	}
 }
@@ -167,4 +185,17 @@ func stringField(d *document.Document, key string) string {
 func showBoolField(d *document.Document, key string) bool {
 	v, _ := d.Get(key).(bool)
 	return v
+}
+
+func showIntField(d *document.Document, key string) int {
+	switch v := d.Get(key).(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	case float32:
+		return int(v)
+	default:
+		return 0
+	}
 }

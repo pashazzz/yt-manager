@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { api } from '../api/client'
 import type { Show, Episode, Section } from '../types'
 import ShowCard from '../components/ShowCard'
@@ -10,6 +13,25 @@ import AddVideoModal from '../components/AddVideoModal'
 interface ShowWithEpisodes {
   show: Show
   episodes: Episode[]
+}
+
+function SortableShowCard(props: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.show.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+    zIndex: isDragging ? 10 : 1,
+  }
+
+  return (
+    <ShowCard
+      {...props}
+      setNodeRef={setNodeRef}
+      style={style}
+      listeners={{ ...attributes, ...listeners }}
+    />
+  )
 }
 
 export default function ShowsPage() {
@@ -26,6 +48,14 @@ export default function ShowsPage() {
   const [showModal, setShowModal] = useState(false)
   const [showVideoModal, setShowVideoModal] = useState(false)
   const [videoLoading, setVideoLoading] = useState(false)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  )
 
   useEffect(() => {
     if (!sectionId) return
@@ -117,6 +147,20 @@ export default function ShowsPage() {
     }
   }
 
+  const handleDragEndShows = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      const oldIndex = items.findIndex(i => i.show.id === active.id)
+      const newIndex = items.findIndex(i => i.show.id === over.id)
+      const newItems = arrayMove(items, oldIndex, newIndex)
+      setItems(newItems)
+
+      if (sectionId) {
+        api.reorderShows(sectionId, newItems.map(i => i.show.id)).catch(console.error)
+      }
+    }
+  }
+
   const handleToggleWatchedSingle = async (ep: Episode) => {
     const newIsWatched = !ep.isWatched
     const newTime = newIsWatched ? ep.duration : 0
@@ -173,18 +217,22 @@ export default function ShowsPage() {
                 <h2 className="shows-section-title">
                   Шоу · {items.length}
                 </h2>
-                <div className="shows-grid">
-                  {items.map(({ show, episodes }) => (
-                    <ShowCard
-                      key={show.id}
-                      show={show}
-                      episodes={episodes}
-                      sections={sections}
-                      onDelete={handleDelete}
-                      onMove={handleMove}
-                    />
-                  ))}
-                </div>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndShows}>
+                  <SortableContext items={items.map(i => i.show.id)} strategy={rectSortingStrategy}>
+                    <div className="shows-grid">
+                      {items.map(({ show, episodes }) => (
+                        <SortableShowCard
+                          key={show.id}
+                          show={show}
+                          episodes={episodes}
+                          sections={sections}
+                          onDelete={handleDelete}
+                          onMove={handleMove}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </>
             )}
 

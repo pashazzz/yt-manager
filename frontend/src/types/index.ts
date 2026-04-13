@@ -5,6 +5,8 @@ export interface Show {
   ownerId: string
   sectionId: string
   reverseOrder: boolean
+  isSingles: boolean
+  orderIndex: number
   createdAt: string
 }
 
@@ -25,7 +27,14 @@ export interface Section {
   ownerId: string
   isDefault: boolean
   orderIndex: number
+  useThumb: boolean
   createdAt: string
+}
+
+export interface SectionInfo extends Section {
+  showCount: number
+  episodeCount: number
+  firstVideoId: string
 }
 
 export interface ShowDetail {

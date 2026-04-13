@@ -4,10 +4,10 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { Section } from '../types'
+import type { SectionInfo } from '../types'
 import SectionCard from '../components/SectionCard'
 
-function SortableSection({ section, showCount, index, onDelete }: any) {
+function SortableSection({ section, index, onDelete, onToggleThumb }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -21,9 +21,9 @@ function SortableSection({ section, showCount, index, onDelete }: any) {
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <SectionCard
         section={section}
-        showCount={showCount}
         index={index}
         onDelete={onDelete}
+        onToggleThumb={onToggleThumb}
       />
     </div>
   )
@@ -31,8 +31,7 @@ function SortableSection({ section, showCount, index, onDelete }: any) {
 
 
 export default function SectionsPage() {
-  const [sections, setSections] = useState<Section[]>([])
-  const [showCounts, setShowCounts] = useState<Record<string, number>>({})
+  const [sections, setSections] = useState<SectionInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newName, setNewName] = useState('')
@@ -54,16 +53,6 @@ export default function SectionsPage() {
       setLoading(true)
       const list = await api.getSections()
       setSections(list)
-
-      // Загружаем количество шоу в каждом разделе параллельно
-      const counts: Record<string, number> = {}
-      await Promise.all(
-        list.map(async s => {
-          const res = await api.getSectionShows(s.id).catch(() => ({ shows: [] }))
-          counts[s.id] = res.shows.length
-        }),
-      )
-      setShowCounts(counts)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
     } finally {
@@ -78,8 +67,8 @@ export default function SectionsPage() {
     setCreating(true)
     try {
       const s = await api.createSection(name)
-      setSections(prev => [...prev, s])
-      setShowCounts(prev => ({ ...prev, [s.id]: 0 }))
+      // Временно добавляем как SectionInfo для UI
+      setSections(prev => [...prev, { ...s, showCount: 0, episodeCount: 0, firstVideoId: '' }])
       setNewName('')
       setShowForm(false)
     } catch (err: unknown) {
@@ -100,6 +89,15 @@ export default function SectionsPage() {
     }
   }
 
+  async function handleToggleThumb(id: string, useThumb: boolean) {
+    try {
+      await api.updateSectionSettings(id, useThumb)
+      setSections(prev => prev.map(s => s.id === id ? { ...s, useThumb } : s))
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка обновления')
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (over && active.id !== over.id) {
@@ -107,7 +105,7 @@ export default function SectionsPage() {
         const oldIndex = items.findIndex(i => i.id === active.id)
         const newIndex = items.findIndex(i => i.id === over.id)
         const newItems = arrayMove(items, oldIndex, newIndex)
-        
+
         api.reorderSections(newItems.map(i => i.id)).catch(console.error)
         return newItems
       })
@@ -171,9 +169,9 @@ export default function SectionsPage() {
                     <SortableSection
                       key={s.id}
                       section={s}
-                      showCount={showCounts[s.id] ?? 0}
                       index={i}
                       onDelete={handleDelete}
+                      onToggleThumb={handleToggleThumb}
                     />
                   ))}
                 </div>

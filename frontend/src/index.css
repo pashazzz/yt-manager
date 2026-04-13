@@ -130,6 +130,27 @@ input { font-family: inherit; }
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   background: var(--bg-surface);
 }
+.show-card-drag-handle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: #fff;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.show-card:hover .show-card-drag-handle {
+  opacity: 1;
+}
 .show-card-thumb img {
   width: 100%;
   height: 100%;
@@ -361,10 +382,11 @@ input { font-family: inherit; }
    SHOW PAGE (Player layout)
 ═══════════════════════════════════════════════════════════════════════════ */
 .show-page {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  overflow: hidden;
 }
 
 .show-page-header {
@@ -405,7 +427,7 @@ input { font-family: inherit; }
   display: grid;
   grid-template-columns: 1fr 340px;
   gap: 0;
-  min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Player section ── */
@@ -415,6 +437,7 @@ input { font-family: inherit; }
   padding: 20px 20px 20px 24px;
   gap: 16px;
   background: var(--bg);
+  overflow-y: auto;
 }
 .player-wrapper {
   position: relative;
@@ -671,10 +694,15 @@ input { font-family: inherit; }
   backdrop-filter: blur(4px);
   z-index: 1;
 }
-.btn-delete-section {
+.section-card-top-actions {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+.btn-delete-section {
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -686,7 +714,6 @@ input { font-family: inherit; }
   justify-content: center;
   opacity: 0;
   transition: var(--transition);
-  z-index: 2;
   border: none;
   cursor: pointer;
 }

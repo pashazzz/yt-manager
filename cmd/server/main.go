@@ -74,10 +74,12 @@ func main() {
 		api.POST("/sections/:id/delete", sectionHandler.DeleteSection)
 		api.GET("/sections/:id/shows", sectionHandler.ListShowsBySection)
 		api.POST("/sections/reorder", sectionHandler.ReorderSections)
+		api.POST("/sections/:id/settings", sectionHandler.UpdateSectionSettings)
 		api.POST("/sections/:id/episodes", sectionHandler.AddSingleVideo)
 
 		// Шоу
 		api.POST("/shows", showHandler.CreateShow)
+		api.POST("/shows/reorder", showHandler.ReorderShows)
 		api.GET("/shows", showHandler.ListShows)
 		api.GET("/shows/:id", showHandler.GetShow)
 		api.POST("/shows/:id/delete", showHandler.DeleteShow)

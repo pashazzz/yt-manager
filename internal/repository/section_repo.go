@@ -33,6 +33,7 @@ func (r *SectionRepo) Create(s *models.Section) error {
 		"ownerId":    s.OwnerID,
 		"isDefault":  s.IsDefault,
 		"orderIndex": s.OrderIndex,
+		"useThumb":   s.UseThumb,
 		"createdAt":  s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionSections, doc)
@@ -112,6 +113,12 @@ func (r *SectionRepo) UpdateOrder(ownerID string, orderedIDs []string) error {
 	return nil
 }
 
+// UpdateSettings обновляет настройки отображения раздела.
+func (r *SectionRepo) UpdateSettings(id string, useThumb bool) error {
+	q := query.NewQuery(db.CollectionSections).Where(query.Field("_id").Eq(id))
+	return r.db.Update(q, map[string]any{"useThumb": useThumb})
+}
+
 func docToSection(d *document.Document) *models.Section {
 	createdAt, _ := d.Get("createdAt").(time.Time)
 	return &models.Section{
@@ -120,6 +127,7 @@ func docToSection(d *document.Document) *models.Section {
 		OwnerID:    stringField(d, "ownerId"),
 		IsDefault:  boolField(d, "isDefault"),
 		OrderIndex: sectionIntField(d, "orderIndex"),
+		UseThumb:   boolField(d, "useThumb"),
 		CreatedAt:  createdAt,
 	}
 }

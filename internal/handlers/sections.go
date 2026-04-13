@@ -28,8 +28,15 @@ func NewSectionHandler(
 	return &SectionHandler{sections: sections, shows: shows, episodes: episodes, ytClient: ytClient}
 }
 
+type SectionInfo struct {
+	models.Section
+	ShowCount    int    `json:"showCount"`
+	EpisodeCount int    `json:"episodeCount"`
+	FirstVideoID string `json:"firstVideoId"`
+}
+
 // ListSections godoc
-// GET /sections — возвращает все разделы, гарантируя существование Default.
+// GET /sections — возвращает все разделы со статистикой.
 func (h *SectionHandler) ListSections(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
@@ -44,7 +51,63 @@ func (h *SectionHandler) ListSections(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, sections)
+
+	// Собираем статистику для каждого раздела
+	result := make([]SectionInfo, 0, len(sections))
+	for _, s := range sections {
+		shows, _ := h.shows.FindBySection(profile.ID, s.ID, s.IsDefault)
+		
+		singlesShow, _ := h.shows.EnsureSinglesShow(profile.ID, s.ID)
+		singlesEpisodes, _ := h.episodes.FindByShow(singlesShow.ID)
+
+		firstVideoID := ""
+		if len(shows) > 0 {
+			// Берем первый эпизод первого шоу
+			eps, _ := h.episodes.FindByShow(shows[0].ID)
+			if len(eps) > 0 {
+				firstVideoID = eps[0].VideoID
+			}
+		} else if len(singlesEpisodes) > 0 {
+			firstVideoID = singlesEpisodes[0].VideoID
+		}
+
+		result = append(result, SectionInfo{
+			Section:      *s,
+			ShowCount:    len(shows),
+			EpisodeCount: len(singlesEpisodes),
+			FirstVideoID: firstVideoID,
+		})
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// UpdateSectionSettings godoc
+// POST /sections/:id/settings
+// Body: { "useThumb": true }
+func (h *SectionHandler) UpdateSectionSettings(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+	sectionID := c.Param("id")
+
+	var body struct {
+		UseThumb bool `json:"useThumb"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	section, err := h.sections.FindByID(sectionID)
+	if err != nil || section == nil || section.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	if err := h.sections.UpdateSettings(sectionID, body.UseThumb); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
 }
 
 // CreateSection godoc
