@@ -114,6 +114,15 @@ func (r *EpisodeRepo) UpdateOrder(showID string, orderedIDs []string) error {
 	return nil
 }
 
+// MoveEpisode обновляет ID шоу и orderIndex у выбранного эпизода
+func (r *EpisodeRepo) MoveEpisode(id string, targetShowID string, newOrderIndex int) error {
+	q := query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id))
+	return r.db.Update(q, map[string]any{
+		"showId":     targetShowID,
+		"orderIndex": newOrderIndex,
+	})
+}
+
 // --- helpers ---
 
 func episodeToDoc(ep *models.Episode) *document.Document {

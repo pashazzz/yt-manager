@@ -88,6 +88,7 @@ func main() {
 
 		// Эпизоды
 		api.POST("/episodes/:id/progress", episodeHandler.SaveProgress)
+		api.POST("/episodes/:id/move", episodeHandler.MoveEpisode)
 	}
 
 	// --- SPA: раздача фронтенда ---

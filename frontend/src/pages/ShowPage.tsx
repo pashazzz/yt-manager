@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { Show, Episode } from '../types'
 import VideoPlayer from '../components/VideoPlayer'
 import EpisodeList from '../components/EpisodeList'
+import AddVideoModal from '../components/AddVideoModal'
 
 function fmtDuration(sec: number): string {
   if (!sec) return ''
@@ -24,6 +25,8 @@ export default function ShowPage() {
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showVideoModal, setShowVideoModal] = useState(false)
+  const [videoLoading, setVideoLoading] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -82,14 +85,17 @@ export default function ShowPage() {
     }
   }
 
-  const handleAddVideo = async () => {
-    const videoUrl = prompt('Введите ссылку на YouTube видео (например https://youtube.com/watch?v=...):')
-    if (!videoUrl?.trim() || !show) return
+  const handleAddVideo = async (videoUrl: string) => {
+    if (!show) return
     try {
-      const res = await api.addEpisode(show.id, videoUrl.trim())
+      setVideoLoading(true)
+      const res = await api.addEpisode(show.id, videoUrl)
       setEpisodes(prev => [...prev, ...res.episodes])
+      setShowVideoModal(false)
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Ошибка добавления видео')
+    } finally {
+      setVideoLoading(false)
     }
   }
 
@@ -171,12 +177,20 @@ export default function ShowPage() {
           episodes={show.playlistUrl === '' ? episodes : (show.reverseOrder ? [...episodes].reverse() : episodes)}
           currentId={currentEpisode?.id ?? ''}
           onSelect={setCurrentEpisode}
-          onAddVideo={handleAddVideo}
+          onAddVideo={() => setShowVideoModal(true)}
           onToggleWatched={handleToggleWatched}
           isReorderable={show.playlistUrl === ''}
           onReorder={handleReorder}
         />
       </div>
+
+      {showVideoModal && (
+        <AddVideoModal
+          onCreated={handleAddVideo}
+          onClose={() => setShowVideoModal(false)}
+          loading={videoLoading}
+        />
+      )}
     </div>
   )
 }

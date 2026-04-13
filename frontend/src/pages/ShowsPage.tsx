@@ -5,6 +5,7 @@ import type { Show, Episode, Section } from '../types'
 import ShowCard from '../components/ShowCard'
 import EpisodeList from '../components/EpisodeList'
 import AddShowModal from '../components/AddShowModal'
+import AddVideoModal from '../components/AddVideoModal'
 
 interface ShowWithEpisodes {
   show: Show
@@ -23,6 +24,8 @@ export default function ShowsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showVideoModal, setShowVideoModal] = useState(false)
+  const [videoLoading, setVideoLoading] = useState(false)
 
   useEffect(() => {
     if (!sectionId) return
@@ -83,15 +86,27 @@ export default function ShowsPage() {
     }
   }
 
-  const handleAddSingleVideo = async () => {
-    const videoUrl = prompt('Введите ссылку на YouTube видео:')
-    if (!videoUrl?.trim() || !sectionId) return
+  const handleAddSingleVideo = async (videoUrl: string) => {
+    if (!sectionId) return
     try {
-      const res = await api.addSectionEpisode(sectionId, videoUrl.trim())
+      setVideoLoading(true)
+      const res = await api.addSectionEpisode(sectionId, videoUrl)
       setSinglesEpisodes(prev => [...prev, ...res.episodes])
+      setShowVideoModal(false)
       if (!singlesShow) load() // перезагрузка, если скрытое шоу только что создано
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setVideoLoading(false)
+    }
+  }
+
+  const handleMoveSingle = async (episodeId: string, targetSectionId: string) => {
+    try {
+      await api.moveEpisode(episodeId, targetSectionId)
+      setSinglesEpisodes(prev => prev.filter(e => e.id !== episodeId))
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка перемещения видео')
     }
   }
 
@@ -146,7 +161,7 @@ export default function ShowsPage() {
               <button className="btn-primary" onClick={() => setShowModal(true)}>
                 Добавить шоу
               </button>
-              <button className="btn-ghost" onClick={handleAddSingleVideo} style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+              <button className="btn-ghost" onClick={() => setShowVideoModal(true)} style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
                 Добавить видео
               </button>
             </div>
@@ -180,10 +195,12 @@ export default function ShowsPage() {
                 currentId=""
                 onSelect={(ep) => singlesShow && navigate(`/shows/${singlesShow.id}?episode=${ep.id}`)}
                 onToggleWatched={handleToggleWatchedSingle}
-                onAddVideo={handleAddSingleVideo}
+                onAddVideo={() => setShowVideoModal(true)}
                 isReorderable={true}
                 onReorder={handleReorderSingles}
                 variant="inline"
+                sections={sections.filter(s => s.id !== sectionId)}
+                onMove={handleMoveSingle}
               />
             </div>
           </>
@@ -196,6 +213,14 @@ export default function ShowsPage() {
           defaultSectionId={sectionId ?? defaultSection?.id ?? ''}
           onCreated={handleCreated}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {showVideoModal && (
+        <AddVideoModal
+          onCreated={handleAddSingleVideo}
+          onClose={() => setShowVideoModal(false)}
+          loading={videoLoading}
         />
       )}
     </div>

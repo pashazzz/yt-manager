@@ -2,7 +2,7 @@ import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useS
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import type { Episode } from '../types'
+import type { Episode, Section } from '../types'
 
 interface Props {
   episodes: Episode[]
@@ -13,6 +13,8 @@ interface Props {
   isReorderable?: boolean
   onReorder?: (episodes: Episode[]) => void
   variant?: 'sidebar' | 'inline'
+  sections?: Section[]
+  onMove?: (episodeId: string, sectionId: string) => void
 }
 
 function fmtDuration(sec: number): string {
@@ -28,7 +30,7 @@ function thumbUrl(videoId: string) {
   return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
 }
 
-function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style }: any) {
+function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, sections, onMove }: any) {
   const progress = ep.duration > 0 ? Math.min(100, (ep.currentTime / ep.duration) * 100) : 0
 
   return (
@@ -66,8 +68,24 @@ function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, l
         )}
       </div>
 
-      {onToggleWatched && (
-        <div className="episode-action-btn" onClick={e => { e.stopPropagation(); onToggleWatched(ep) }}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        {sections && sections.length > 0 && onMove && (
+          <div style={{ position: 'relative', display: 'flex', marginRight: '8px' }}>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6, padding: '0 4px' }}>⋯</button>
+            <select
+              className="native-dropdown-overlay"
+              value=""
+              onChange={e => { e.stopPropagation(); onMove(ep.id, e.target.value); e.target.value = "" }}
+              onClick={e => e.stopPropagation()}
+            >
+              <option value="" disabled>Переместить в</option>
+              {sections.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        {onToggleWatched && (
+          <div className="episode-action-btn" onClick={e => { e.stopPropagation(); onToggleWatched(ep) }}>
           <button 
             title={ep.isWatched ? 'Отметить как непросмотренное' : 'Отметить как просмотренное'}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }}
@@ -76,11 +94,12 @@ function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, l
           </button>
         </div>
       )}
+      </div>
     </div>
   )
 }
 
-function SortableEpisode({ ep, isActive, onSelect, onToggleWatched }: any) {
+function SortableEpisode({ ep, isActive, onSelect, onToggleWatched, sections, onMove }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ep.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -99,11 +118,13 @@ function SortableEpisode({ ep, isActive, onSelect, onToggleWatched }: any) {
       listeners={{ ...attributes, ...listeners }}
       setNodeRef={setNodeRef}
       style={style}
+      sections={sections}
+      onMove={onMove}
     />
   )
 }
 
-export default function EpisodeList({ episodes, currentId, onSelect, onToggleWatched, onAddVideo, isReorderable, onReorder, variant = 'sidebar' }: Props) {
+export default function EpisodeList({ episodes, currentId, onSelect, onToggleWatched, onAddVideo, isReorderable, onReorder, variant = 'sidebar', sections, onMove }: Props) {
   const watchedCount = episodes.filter(e => e.isWatched).length
 
   const sensors = useSensors(
@@ -150,6 +171,8 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
                   isActive={ep.id === currentId}
                   onSelect={onSelect}
                   onToggleWatched={onToggleWatched}
+                  sections={sections}
+                  onMove={onMove}
                 />
               ))}
             </SortableContext>
@@ -163,6 +186,8 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
               onSelect={onSelect}
               onToggleWatched={onToggleWatched}
               isReorderable={false}
+              sections={sections}
+              onMove={onMove}
             />
           ))
         )}

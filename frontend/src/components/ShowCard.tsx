@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect } from 'react'
 import type { Show, Episode, Section } from '../types'
 
 interface Props {
@@ -16,38 +15,21 @@ function thumbUrl(videoId: string | undefined) {
 
 export default function ShowCard({ show, episodes, sections, onDelete, onMove }: Props) {
   const navigate = useNavigate()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
   const firstEp = episodes[0]
   const watched = episodes.filter(e => e.isWatched).length
   const progress = episodes.length > 0 ? (watched / episodes.length) * 100 : 0
-
-  // Закрывать меню при клике снаружи
-  useEffect(() => {
-    if (!menuOpen) return
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [menuOpen])
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (confirm(`Удалить «${show.title}»?`)) onDelete(show.id)
   }
 
-  const handleMenuToggle = (e: React.MouseEvent) => {
+  const handleMove = (e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation()
-    setMenuOpen(v => !v)
-  }
-
-  const handleMove = (e: React.MouseEvent, sectionId: string) => {
-    e.stopPropagation()
-    setMenuOpen(false)
-    onMove(show.id, sectionId)
+    const targetSection = e.target.value
+    if (targetSection) onMove(show.id, targetSection)
+    // reset select
+    e.target.value = ""
   }
 
   const otherSections = sections.filter(s => s.id !== show.sectionId)
@@ -64,28 +46,24 @@ export default function ShowCard({ show, episodes, sections, onDelete, onMove }:
       {/* Кнопки управления */}
       <div className="show-card-actions">
         {otherSections.length > 0 && (
-          <div className="show-card-menu-wrap" ref={menuRef}>
+          <div style={{ position: 'relative', display: 'flex' }}>
             <button
               className="btn-card-action"
-              onClick={handleMenuToggle}
               title="Переместить в раздел"
             >
               ⋯
             </button>
-            {menuOpen && (
-              <div className="show-card-menu">
-                <div className="show-card-menu-label">Переместить в</div>
-                {otherSections.map(s => (
-                  <button
-                    key={s.id}
-                    className="show-card-menu-item"
-                    onClick={e => handleMove(e, s.id)}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            <select
+              className="native-dropdown-overlay"
+              value=""
+              onChange={handleMove}
+              onClick={e => e.stopPropagation()}
+            >
+              <option value="" disabled>Переместить в</option>
+              {otherSections.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
           </div>
         )}
         <button className="btn-card-action btn-card-delete" onClick={handleDelete} title="Удалить">
