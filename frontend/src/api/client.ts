@@ -80,10 +80,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tagIds }),
     }),
-  addTagEpisode: (tagId: string, url: string) =>
+  addTagEpisode: (tagId: string, url: string, tagIds?: string[]) =>
     request<{ episodes: Episode[] }>(`/tags/${tagId}/episodes`, {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, tagIds }),
     }),
   reorderEpisodes: (showId: string, orderedIds: string[]) =>
     request<void>(`/shows/${showId}/episodes/reorder`, {

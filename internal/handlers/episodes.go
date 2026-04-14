@@ -152,5 +152,15 @@ func (h *EpisodeHandler) DeleteEpisode(c *gin.Context) {
 		return
 	}
 
+	// Переиндексируем оставшиеся эпизоды этого шоу, чтобы не было дырок в нумерации
+	remaining, err := h.episodes.FindByShow(ep.ShowID)
+	if err == nil && len(remaining) > 0 {
+		ids := make([]string, len(remaining))
+		for i, e := range remaining {
+			ids[i] = e.ID
+		}
+		_ = h.episodes.UpdateOrder(ep.ShowID, ids)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"id": episodeID, "message": "deleted"})
 }

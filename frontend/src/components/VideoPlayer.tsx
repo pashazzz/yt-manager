@@ -88,9 +88,6 @@ export default function VideoPlayer({ episode, onProgressSaved }: Props) {
   // Когда плеер готов — перемотать на сохранённую позицию
   const handleReady = (e: YouTubeEvent) => {
     playerRef.current = e.target
-    if (episode.currentTime > 5) {
-      e.target.seekTo(episode.currentTime, true)
-    }
     // На десктопе сразу запускаем heartbeat
     if (!isMobile) {
       startHeartbeat()
@@ -115,13 +112,12 @@ export default function VideoPlayer({ episode, onProgressSaved }: Props) {
     await saveProgress(episode.duration, true)
   }
 
-
-
   const opts = {
     width: '100%',
     height: '100%',
     playerVars: {
       autoplay: 0,
+      start: Math.floor(episode.currentTime),
       playsinline: 1,      // iOS: не открывать в системном плеере
       rel: 0,              // Не показывать рекомендации по окончании
       modestbranding: 1,

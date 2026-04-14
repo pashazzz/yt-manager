@@ -122,11 +122,11 @@ export default function ShowsPage() {
     }
   }
 
-  const handleAddSingleVideo = async (videoUrl: string) => {
+  const handleAddSingleVideo = async (videoUrl: string, selectedTagIds: string[]) => {
     if (!tagId) return
     try {
       setVideoLoading(true)
-      const res = await api.addTagEpisode(tagId, videoUrl)
+      const res = await api.addTagEpisode(tagId, videoUrl, selectedTagIds)
       setSinglesEpisodes(prev => [...prev, ...res.episodes])
       setShowVideoModal(false)
       if (!singlesShow) load() // перезагрузка, если скрытое шоу только что создано
@@ -291,6 +291,8 @@ export default function ShowsPage() {
 
       {showVideoModal && (
         <AddVideoModal
+          tags={tags}
+          defaultTagId={tagId ?? defaultTag?.id ?? ''}
           onCreated={handleAddSingleVideo}
           onClose={() => setShowVideoModal(false)}
           loading={videoLoading}

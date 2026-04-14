@@ -31,7 +31,7 @@ function thumbUrl(videoId: string) {
   return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
 }
 
-function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, tags, onMove, onDelete }: any) {
+function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, tags, onMove, onDelete }: any) {
   const progress = ep.duration > 0 ? Math.min(100, (ep.currentTime / ep.duration) * 100) : 0
 
   return (
@@ -62,7 +62,7 @@ function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, l
       </div>
 
       <div className="episode-item-info">
-        <div className="episode-item-index">Эп. {ep.orderIndex + 1}</div>
+        <div className="episode-item-index">Эп. {index + 1}</div>
         <div className="episode-item-title">{ep.title}</div>
         {ep.duration > 0 && (
           <div className="episode-item-duration">{fmtDuration(ep.duration)}</div>
@@ -137,7 +137,7 @@ function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, l
   )
 }
 
-function SortableEpisode({ ep, isActive, onSelect, onToggleWatched, tags, onMove, onDelete }: any) {
+function SortableEpisode({ ep, index, isActive, onSelect, onToggleWatched, tags, onMove, onDelete }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ep.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -149,6 +149,7 @@ function SortableEpisode({ ep, isActive, onSelect, onToggleWatched, tags, onMove
   return (
     <EpisodeItem
       ep={ep}
+      index={index}
       isActive={isActive}
       onSelect={onSelect}
       onToggleWatched={onToggleWatched}
@@ -203,10 +204,11 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
         {isReorderable ? (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={episodes} strategy={verticalListSortingStrategy}>
-              {episodes.map(ep => (
+              {episodes.map((ep, i) => (
                 <SortableEpisode
                   key={ep.id}
                   ep={ep}
+                  index={i}
                   isActive={ep.id === currentId}
                   onSelect={onSelect}
                   onToggleWatched={onToggleWatched}
@@ -218,10 +220,11 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
             </SortableContext>
           </DndContext>
         ) : (
-          episodes.map(ep => (
+          episodes.map((ep, i) => (
             <EpisodeItem
               key={ep.id}
               ep={ep}
+              index={i}
               isActive={ep.id === currentId}
               onSelect={onSelect}
               onToggleWatched={onToggleWatched}

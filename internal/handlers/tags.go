@@ -234,11 +234,26 @@ func (h *TagHandler) AddSingleVideoToTag(c *gin.Context) {
 	tagID := c.Param("id")
 
 	var body struct {
-		URL string `json:"url" binding:"required"`
+		URL    string   `json:"url" binding:"required"`
+		TagIDs []string `json:"tagIds"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Если теги не указаны — используем текущий тег из URL
+	if len(body.TagIDs) == 0 {
+		body.TagIDs = []string{tagID}
+	}
+
+	// Проверяем все теги
+	for _, tid := range body.TagIDs {
+		t, err := h.tags.FindByID(tid)
+		if err != nil || t == nil || t.OwnerID != profile.ID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied to tag: " + tid})
+			return
+		}
 	}
 
 	tag, err := h.tags.FindByID(tagID)
@@ -273,7 +288,7 @@ func (h *TagHandler) AddSingleVideoToTag(c *gin.Context) {
 			Title:      entry.Title,
 			Duration:   entry.Duration,
 			OrderIndex: maxOrderIndex + 1 + i,
-			TagIDs:     []string{tagID},
+			TagIDs:     body.TagIDs,
 		})
 	}
 

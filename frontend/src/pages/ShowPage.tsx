@@ -200,7 +200,7 @@ export default function ShowPage() {
 
       {showVideoModal && (
         <AddVideoModal
-          onCreated={handleAddVideo}
+          onCreated={(videoUrl) => handleAddVideo(videoUrl)}
           onClose={() => setShowVideoModal(false)}
           loading={videoLoading}
         />
