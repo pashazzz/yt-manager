@@ -146,6 +146,22 @@ func (h *ShowHandler) GetShow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Если это служебное шоу для синглов, нужно подтянуть ВСЕ видео этого тега,
+	// а не только те, у которых ShowID совпадает (из-за мульти-теггинга)
+	if show.IsSingles && len(show.TagIDs) > 0 {
+		tagID := show.TagIDs[0]
+		isDefault := false
+		if t, _ := h.tags.FindByID(tagID); t != nil {
+			isDefault = t.IsDefault
+		}
+		
+		singles, err := h.episodes.FindSinglesByTag(profile.ID, tagID, isDefault)
+		if err == nil {
+			episodes = singles
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"show": show, "episodes": episodes})
 }
 
