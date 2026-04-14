@@ -31,6 +31,40 @@ func (r *EpisodeRepo) BulkCreate(episodes []*models.Episode) error {
 	return r.db.Insert(db.CollectionEpisodes, docs...)
 }
 
+// FindByOwnerID возвращает все эпизоды, принадлежащие владельцу (из всех шоу).
+func (r *EpisodeRepo) FindByOwnerID(ownerID string) ([]*models.Episode, error) {
+	// 1. Находим все шоу владельца
+	qShows := query.NewQuery(db.CollectionShows).
+		Where(query.Field("ownerId").Eq(ownerID))
+	showsDocs, err := r.db.FindAll(qShows)
+	if err != nil {
+		return nil, err
+	}
+	if len(showsDocs) == 0 {
+		return nil, nil
+	}
+
+	showIDs := make([]any, 0, len(showsDocs))
+	for _, d := range showsDocs {
+		showIDs = append(showIDs, d.ObjectId())
+	}
+
+	// 2. Ищем эпизоды в этих шоу
+	qEps := query.NewQuery(db.CollectionEpisodes).
+		Where(query.Field("showId").In(showIDs...)).
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1})
+	docs, err := r.db.FindAll(qEps)
+	if err != nil {
+		return nil, err
+	}
+
+	eps := make([]*models.Episode, 0, len(docs))
+	for _, d := range docs {
+		eps = append(eps, docToEpisode(d))
+	}
+	return eps, nil
+}
+
 // FindByShow возвращает все эпизоды шоу, отсортированные по OrderIndex.
 func (r *EpisodeRepo) FindByShow(showID string) ([]*models.Episode, error) {
 	q := query.NewQuery(db.CollectionEpisodes).
@@ -45,6 +79,60 @@ func (r *EpisodeRepo) FindByShow(showID string) ([]*models.Episode, error) {
 	episodes := make([]*models.Episode, 0, len(docs))
 	for _, d := range docs {
 		episodes = append(episodes, docToEpisode(d))
+	}
+	return episodes, nil
+}
+
+// FindSinglesByTag возвращает все одиночные видео (эпизоды из скрытых шоу),
+// которые отмечены данным тегом. Сначала находит все служебные шоу пользователя,
+// затем выбирает из них эпизоды с нужным тегом.
+func (r *EpisodeRepo) FindSinglesByTag(ownerID, tagID string, isDefault bool) ([]*models.Episode, error) {
+	// 1. Получаем все служебные шоу владельца
+	qShows := query.NewQuery(db.CollectionShows).
+		Where(query.Field("ownerId").Eq(ownerID).And(query.Field("isSingles").Eq(true)))
+	showsDocs, err := r.db.FindAll(qShows)
+	if err != nil {
+		return nil, err
+	}
+	if len(showsDocs) == 0 {
+		return nil, nil
+	}
+
+	showIDs := make([]any, 0, len(showsDocs))
+	for _, d := range showsDocs {
+		showIDs = append(showIDs, d.ObjectId())
+	}
+
+	// 2. Ищем ВСЕ эпизоды в этих шоу (без фильтрации по тегам на уровне БД, чтобы сработала миграция в docToEpisode)
+	qEps := query.NewQuery(db.CollectionEpisodes).
+		Where(query.Field("showId").In(showIDs...)).
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1})
+	docs, err := r.db.FindAll(qEps)
+	if err != nil {
+		return nil, err
+	}
+
+	episodes := make([]*models.Episode, 0, len(docs))
+	for _, d := range docs {
+		ep := docToEpisode(d)
+		
+		isMatch := false
+		// Проверяем, есть ли нужный тег в (уже смигрированном) списке
+		for _, tid := range ep.TagIDs {
+			if tid == tagID {
+				isMatch = true
+				break
+			}
+		}
+		
+		// Если это дефолтный тег — показываем также те, у которых нет тегов
+		if !isMatch && isDefault && len(ep.TagIDs) == 0 {
+			isMatch = true
+		}
+
+		if isMatch {
+			episodes = append(episodes, ep)
+		}
 	}
 	return episodes, nil
 }
@@ -101,6 +189,13 @@ func (r *EpisodeRepo) DeleteByShow(showID string) error {
 	)
 }
 
+// Delete удаляет один эпизод по ID.
+func (r *EpisodeRepo) Delete(id string) error {
+	return r.db.Delete(
+		query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id)),
+	)
+}
+
 // UpdateOrder обновляет orderIndex для списка эпизодов (используется для drag & drop в пользовательских плейлистах).
 func (r *EpisodeRepo) UpdateOrder(showID string, orderedIDs []string) error {
 	for i, id := range orderedIDs {
@@ -135,10 +230,20 @@ func episodeToDoc(ep *models.Episode) *document.Document {
 		"currentTime": ep.CurrentTime,
 		"isWatched":   ep.IsWatched,
 		"orderIndex":  ep.OrderIndex,
+		"tagIds":      ep.TagIDs,
 	})
 }
 
 func docToEpisode(d *document.Document) *models.Episode {
+	tagIDs := stringSliceField(d, "tagIds")
+
+	// Миграция: если нет tagIds, но есть sectionId, используем его как единственный тег
+	if len(tagIDs) == 0 && d.Has("sectionId") {
+		if sid, ok := d.Get("sectionId").(string); ok && sid != "" {
+			tagIDs = []string{sid}
+		}
+	}
+
 	return &models.Episode{
 		ID:          d.ObjectId(),
 		ShowID:      stringField(d, "showId"),
@@ -148,7 +253,30 @@ func docToEpisode(d *document.Document) *models.Episode {
 		CurrentTime: floatField(d, "currentTime"),
 		IsWatched:   boolField(d, "isWatched"),
 		OrderIndex:  intField(d, "orderIndex"),
+		TagIDs:      tagIDs,
 	}
+}
+
+func (r *EpisodeRepo) UpdateTags(id string, tagIDs []string) error {
+	q := query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id))
+	return r.db.Update(q, map[string]any{"tagIds": tagIDs})
+}
+
+func stringSliceField(d *document.Document, key string) []string {
+	result := []string{}
+	if !d.Has(key) {
+		return result
+	}
+	if raw, ok := d.Get(key).([]any); ok {
+		for _, v := range raw {
+			if s, ok := v.(string); ok {
+				result = append(result, s)
+			}
+		}
+	} else if raw, ok := d.Get(key).([]string); ok {
+		result = raw
+	}
+	return result
 }
 
 func floatField(d *document.Document, key string) float64 {

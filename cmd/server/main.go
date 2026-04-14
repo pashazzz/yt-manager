@@ -33,7 +33,7 @@ func main() {
 
 	// --- Репозитории ---
 	profileRepo := repository.NewProfileRepo(database)
-	sectionRepo := repository.NewSectionRepo(database)
+	tagRepo := repository.NewTagRepo(database)
 	showRepo := repository.NewShowRepo(database)
 	episodeRepo := repository.NewEpisodeRepo(database)
 
@@ -61,21 +61,21 @@ func main() {
 	r.Use(middleware.Profile(profileRepo))
 
 	// --- Хендлеры ---
-	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, sectionRepo, ytClient)
-	episodeHandler := handlers.NewEpisodeHandler(episodeRepo, showRepo)
-	sectionHandler := handlers.NewSectionHandler(sectionRepo, showRepo, episodeRepo, ytClient)
+	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, tagRepo, ytClient)
+	episodeHandler := handlers.NewEpisodeHandler(episodeRepo, showRepo, tagRepo)
+	tagHandler := handlers.NewTagHandler(tagRepo, showRepo, episodeRepo, ytClient)
 
 	// --- Маршруты ---
 	api := r.Group("/api/v1")
 	{
-		// Разделы
-		api.GET("/sections", sectionHandler.ListSections)
-		api.POST("/sections", sectionHandler.CreateSection)
-		api.POST("/sections/:id/delete", sectionHandler.DeleteSection)
-		api.GET("/sections/:id/shows", sectionHandler.ListShowsBySection)
-		api.POST("/sections/reorder", sectionHandler.ReorderSections)
-		api.POST("/sections/:id/settings", sectionHandler.UpdateSectionSettings)
-		api.POST("/sections/:id/episodes", sectionHandler.AddSingleVideo)
+		// Теги (бывш. Разделы)
+		api.GET("/tags", tagHandler.ListTags)
+		api.POST("/tags", tagHandler.CreateTag)
+		api.POST("/tags/:id/delete", tagHandler.DeleteTag)
+		api.GET("/tags/:id/items", tagHandler.ListItemsByTag)
+		api.POST("/tags/reorder", tagHandler.ReorderTags)
+		api.POST("/tags/:id/settings", tagHandler.UpdateTagSettings)
+		api.POST("/tags/:id/episodes", tagHandler.AddSingleVideoToTag)
 
 		// Шоу
 		api.POST("/shows", showHandler.CreateShow)
@@ -83,14 +83,16 @@ func main() {
 		api.GET("/shows", showHandler.ListShows)
 		api.GET("/shows/:id", showHandler.GetShow)
 		api.POST("/shows/:id/delete", showHandler.DeleteShow)
-		api.POST("/shows/:id/section", showHandler.MoveShow)
+		api.POST("/shows/:id/tags", showHandler.UpdateShowTags)
 		api.POST("/shows/:id/reverse", showHandler.ReverseShow)
 		api.POST("/shows/:id/episodes", showHandler.AddEpisode)
 		api.POST("/shows/:id/episodes/reorder", showHandler.ReorderEpisodes)
 
 		// Эпизоды
 		api.POST("/episodes/:id/progress", episodeHandler.SaveProgress)
-		api.POST("/episodes/:id/move", episodeHandler.MoveEpisode)
+		api.POST("/episodes/:id/tags", episodeHandler.UpdateEpisodeTags)
+		api.POST("/episodes/:id/delete", episodeHandler.DeleteEpisode)
+		api.GET("/episodes", episodeHandler.ListEpisodes)
 	}
 
 	// --- SPA: раздача фронтенда ---

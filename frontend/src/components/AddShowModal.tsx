@@ -1,19 +1,19 @@
 import { useState, useRef } from 'react'
 import { api } from '../api/client'
-import type { Show, Section } from '../types'
+import type { Show, Tag } from '../types'
 
 interface Props {
-  sections: Section[]
-  defaultSectionId: string
+  tags: Tag[]
+  defaultTagId: string
   onCreated: (show: Show) => void
   onClose: () => void
 }
 
-export default function AddShowModal({ sections, defaultSectionId, onCreated, onClose }: Props) {
+export default function AddShowModal({ tags, defaultTagId, onCreated, onClose }: Props) {
   const [isCustom, setIsCustom] = useState(false)
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
-  const [sectionId, setSectionId] = useState(defaultSectionId)
+  const [tagIds, setTagIds] = useState<string[]>([defaultTagId])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -29,7 +29,7 @@ export default function AddShowModal({ sections, defaultSectionId, onCreated, on
     setError('')
     setLoading(true)
     try {
-      const res = await api.createShow(reqUrl, sectionId, reqTitle)
+      const res = await api.createShow(reqUrl, tagIds, reqTitle)
       onCreated(res.show)
       onClose()
     } catch (err: unknown) {
@@ -81,21 +81,30 @@ export default function AddShowModal({ sections, defaultSectionId, onCreated, on
             />
           )}
 
-          {sections.length > 1 && (
+          {tags.length > 0 && (
             <div className="modal-field">
-              <label className="modal-label">Раздел</label>
-              <select
-                className="modal-select"
-                value={sectionId}
-                onChange={e => setSectionId(e.target.value)}
-                disabled={loading}
-              >
-                {sections.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}{s.isDefault ? ' (по умолчанию)' : ''}
-                  </option>
+              <label className="modal-label">Теги</label>
+              <div className="tag-checkbox-grid">
+                {tags.map(t => (
+                  <label key={t.id} className="tag-checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={(tagIds || []).includes(t.id)}
+                      onChange={e => {
+                        const checked = e.target.checked
+                        if (checked) {
+                          setTagIds(prev => [...prev, t.id])
+                        } else {
+                          // Предотвращаем пустой список, если это логически важно, 
+                          // или просто позволяем удалять
+                          setTagIds(prev => prev.filter(id => id !== t.id))
+                        }
+                      }}
+                    />
+                    <span>{t.name}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 

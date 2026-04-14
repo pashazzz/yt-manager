@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/pavlo/yt-manager/internal/middleware"
+	"github.com/pavlo/yt-manager/internal/models"
 	"github.com/pavlo/yt-manager/internal/repository"
 )
 
@@ -13,13 +14,34 @@ import (
 type EpisodeHandler struct {
 	episodes *repository.EpisodeRepo
 	shows    *repository.ShowRepo
+	tags     *repository.TagRepo
 }
 
 func NewEpisodeHandler(
 	episodes *repository.EpisodeRepo,
 	shows *repository.ShowRepo,
+	tags *repository.TagRepo,
 ) *EpisodeHandler {
-	return &EpisodeHandler{episodes: episodes, shows: shows}
+	return &EpisodeHandler{episodes: episodes, shows: shows, tags: tags}
+}
+
+// ListEpisodes godoc
+// GET /episodes
+func (h *EpisodeHandler) ListEpisodes(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+
+	var eps []*models.Episode
+	var err error
+
+	// Все эпизоды владельца (пока без пагинации)
+	eps, err = h.episodes.FindByOwnerID(profile.ID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, eps)
 }
 
 // SaveProgress godoc
@@ -63,15 +85,15 @@ func (h *EpisodeHandler) SaveProgress(c *gin.Context) {
 	})
 }
 
-// MoveEpisode godoc
-// POST /episodes/:id/move
-// Body: { "sectionId": "newSectionId" }
-func (h *EpisodeHandler) MoveEpisode(c *gin.Context) {
+// UpdateEpisodeTags godoc
+// PATCH /episodes/:id/tags
+// Body: { "tagIds": ["uuid1", "uuid2"] }
+func (h *EpisodeHandler) UpdateEpisodeTags(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 	episodeID := c.Param("id")
 
 	var body struct {
-		SectionID string `json:"sectionId"`
+		TagIDs []string `json:"tagIds" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -90,18 +112,45 @@ func (h *EpisodeHandler) MoveEpisode(c *gin.Context) {
 		return
 	}
 
-	targetShow, err := h.shows.EnsureSinglesShow(profile.ID, body.SectionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to ensure target singles show"})
-		return
+	// Проверяем теги
+	for _, tid := range body.TagIDs {
+		t, err := h.tags.FindByID(tid)
+		if err != nil || t == nil || t.OwnerID != profile.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tagId: " + tid})
+			return
+		}
 	}
 
-	maxOrder, _ := h.episodes.GetMaxOrderIndex(targetShow.ID)
-
-	if err := h.episodes.MoveEpisode(ep.ID, targetShow.ID, maxOrder+1); err != nil {
+	if err := h.episodes.UpdateTags(episodeID, body.TagIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	c.JSON(http.StatusOK, gin.H{"id": episodeID, "tagIds": body.TagIDs})
+}
+
+// DeleteEpisode godoc
+// POST /episodes/:id/delete
+func (h *EpisodeHandler) DeleteEpisode(c *gin.Context) {
+	profile := middleware.GetProfile(c)
+	episodeID := c.Param("id")
+
+	ep, err := h.episodes.FindByID(episodeID)
+	if err != nil || ep == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "episode not found"})
+		return
+	}
+
+	show, err := h.shows.FindByID(ep.ShowID)
+	if err != nil || show == nil || show.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
+	if err := h.episodes.Delete(episodeID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"id": episodeID, "message": "deleted"})
 }

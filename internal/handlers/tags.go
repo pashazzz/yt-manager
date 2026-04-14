@@ -11,55 +11,54 @@ import (
 	"github.com/pavlo/yt-manager/internal/ytdlp"
 )
 
-// SectionHandler держит зависимости для хендлеров разделов.
-type SectionHandler struct {
-	sections *repository.SectionRepo
+// TagHandler держит зависимости для хендлеров тегов.
+type TagHandler struct {
+	tags     *repository.TagRepo
 	shows    *repository.ShowRepo
 	episodes *repository.EpisodeRepo
 	ytClient *ytdlp.Client
 }
 
-func NewSectionHandler(
-	sections *repository.SectionRepo,
+func NewTagHandler(
+	tags *repository.TagRepo,
 	shows *repository.ShowRepo,
 	episodes *repository.EpisodeRepo,
 	ytClient *ytdlp.Client,
-) *SectionHandler {
-	return &SectionHandler{sections: sections, shows: shows, episodes: episodes, ytClient: ytClient}
+) *TagHandler {
+	return &TagHandler{tags: tags, shows: shows, episodes: episodes, ytClient: ytClient}
 }
 
-type SectionInfo struct {
-	models.Section
+type TagInfo struct {
+	models.Tag
 	ShowCount    int    `json:"showCount"`
 	EpisodeCount int    `json:"episodeCount"`
 	FirstVideoID string `json:"firstVideoId"`
 }
 
-// ListSections godoc
-// GET /sections — возвращает все разделы со статистикой.
-func (h *SectionHandler) ListSections(c *gin.Context) {
+// ListTags godoc
+// GET /tags — возвращает все теги со статистикой.
+func (h *TagHandler) ListTags(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
-	// Гарантируем существование дефолтного раздела
-	if _, err := h.sections.EnsureDefault(profile.ID); err != nil {
+	// Гарантируем существование дефолтного тега
+	if _, err := h.tags.EnsureDefault(profile.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	sections, err := h.sections.FindByOwner(profile.ID)
+	tags, err := h.tags.FindByOwner(profile.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Собираем статистику для каждого раздела
-	result := make([]SectionInfo, 0, len(sections))
-	for _, s := range sections {
-		shows, _ := h.shows.FindBySection(profile.ID, s.ID, s.IsDefault)
+	// Собираем статистику для каждого тега
+	result := make([]TagInfo, 0, len(tags))
+	for _, t := range tags {
+		shows, _ := h.shows.FindByTag(profile.ID, t.ID, t.IsDefault)
 		
-		singlesShow, _ := h.shows.EnsureSinglesShow(profile.ID, s.ID)
-		singlesEpisodes, _ := h.episodes.FindByShow(singlesShow.ID)
-
+		singlesEpisodes, _ := h.episodes.FindSinglesByTag(profile.ID, t.ID, t.IsDefault)
+		
 		firstVideoID := ""
 		if len(shows) > 0 {
 			// Берем первый эпизод первого шоу
@@ -71,8 +70,8 @@ func (h *SectionHandler) ListSections(c *gin.Context) {
 			firstVideoID = singlesEpisodes[0].VideoID
 		}
 
-		result = append(result, SectionInfo{
-			Section:      *s,
+		result = append(result, TagInfo{
+			Tag:          *t,
 			ShowCount:    len(shows),
 			EpisodeCount: len(singlesEpisodes),
 			FirstVideoID: firstVideoID,
@@ -82,12 +81,12 @@ func (h *SectionHandler) ListSections(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// UpdateSectionSettings godoc
-// POST /sections/:id/settings
+// UpdateTagSettings godoc
+// POST /tags/:id/settings
 // Body: { "useThumb": true }
-func (h *SectionHandler) UpdateSectionSettings(c *gin.Context) {
+func (h *TagHandler) UpdateTagSettings(c *gin.Context) {
 	profile := middleware.GetProfile(c)
-	sectionID := c.Param("id")
+	tagID := c.Param("id")
 
 	var body struct {
 		UseThumb bool `json:"useThumb"`
@@ -97,23 +96,23 @@ func (h *SectionHandler) UpdateSectionSettings(c *gin.Context) {
 		return
 	}
 
-	section, err := h.sections.FindByID(sectionID)
-	if err != nil || section == nil || section.OwnerID != profile.ID {
+	tag, err := h.tags.FindByID(tagID)
+	if err != nil || tag == nil || tag.OwnerID != profile.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
 
-	if err := h.sections.UpdateSettings(sectionID, body.UseThumb); err != nil {
+	if err := h.tags.UpdateSettings(tagID, body.UseThumb); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.Status(http.StatusOK)
 }
 
-// CreateSection godoc
-// POST /sections
+// CreateTag godoc
+// POST /tags
 // Body: { "name": "Аниме" }
-func (h *SectionHandler) CreateSection(c *gin.Context) {
+func (h *TagHandler) CreateTag(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
 	var body struct {
@@ -124,60 +123,47 @@ func (h *SectionHandler) CreateSection(c *gin.Context) {
 		return
 	}
 
-	s := &models.Section{Name: body.Name, OwnerID: profile.ID}
-	if err := h.sections.Create(s); err != nil {
+	t := &models.Tag{Name: body.Name, OwnerID: profile.ID}
+	if err := h.tags.Create(t); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, s)
+	c.JSON(http.StatusCreated, t)
 }
 
-// DeleteSection godoc
-// DELETE /sections/:id — нельзя удалить Default. Шоу переезжают в Default.
-func (h *SectionHandler) DeleteSection(c *gin.Context) {
+// DeleteTag godoc
+// DELETE /tags/:id — нельзя удалить Default. Теги просто снимаются с элементов.
+func (h *TagHandler) DeleteTag(c *gin.Context) {
 	profile := middleware.GetProfile(c)
-	sectionID := c.Param("id")
+	tagID := c.Param("id")
 
-	section, err := h.sections.FindByID(sectionID)
-	if err != nil || section == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
+	tag, err := h.tags.FindByID(tagID)
+	if err != nil || tag == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
 		return
 	}
-	if section.OwnerID != profile.ID {
+	if tag.OwnerID != profile.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
-	if section.IsDefault {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete default section"})
+	if tag.IsDefault {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete default tag"})
 		return
 	}
 
-	// Переносим все шоу раздела в Default
-	defaultSec, err := h.sections.EnsureDefault(profile.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	showsInSection, err := h.shows.FindBySection(profile.ID, sectionID, false)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	for _, s := range showsInSection {
-		_ = h.shows.UpdateSection(s.ID, defaultSec.ID)
-	}
-
-	if err := h.sections.Delete(sectionID); err != nil {
+	// При удалении тега мы не удаляем шоу, просто тег исчезает из их списков.
+	// Это произойдет автоматически, так как элементы просто перестанут находиться по этому тегу.
+	if err := h.tags.Delete(tagID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.Status(http.StatusNoContent)
 }
 
-// ReorderSections godoc
-// PATCH /sections/reorder
+// ReorderTags godoc
+// PATCH /tags/reorder
 // Body: { "orderedIds": ["id1", "id2"] }
-func (h *SectionHandler) ReorderSections(c *gin.Context) {
+func (h *TagHandler) ReorderTags(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
 	var body struct {
@@ -188,7 +174,7 @@ func (h *SectionHandler) ReorderSections(c *gin.Context) {
 		return
 	}
 
-	if err := h.sections.UpdateOrder(profile.ID, body.OrderedIDs); err != nil {
+	if err := h.tags.UpdateOrder(profile.ID, body.OrderedIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -196,57 +182,56 @@ func (h *SectionHandler) ReorderSections(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// ListShowsBySection godoc
-// GET /sections/:id/shows — шоу конкретного раздела.
-func (h *SectionHandler) ListShowsBySection(c *gin.Context) {
+// ListItemsByTag godoc
+// GET /tags/:id/items — контент для конкретного тега.
+func (h *TagHandler) ListItemsByTag(c *gin.Context) {
 	profile := middleware.GetProfile(c)
-	sectionID := c.Param("id")
+	tagID := c.Param("id")
 
-	section, err := h.sections.FindByID(sectionID)
-	if err != nil || section == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
+	tag, err := h.tags.FindByID(tagID)
+	if err != nil || tag == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "tag not found"})
 		return
 	}
-	if section.OwnerID != profile.ID {
+	if tag.OwnerID != profile.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
 
-	// Default-раздел подбирает и «бесхозные» шоу (созданные до введения разделов)
-	shows, err := h.shows.FindBySection(profile.ID, sectionID, section.IsDefault)
+	shows, err := h.shows.FindByTag(profile.ID, tagID, tag.IsDefault)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Загружаем скрытое шоу для одиночных видео
-	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, sectionID)
+	// Загружаем скрытое шоу для одиночных видео этого тега
+	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, tagID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// И его эпизоды
-	singlesEpisodes, err := h.episodes.FindByShow(singlesShow.ID)
+	// И его эпизоды (все синглы, отмеченные этим тегом, либо без тегов если тег дефолтный)
+	singlesEpisodes, err := h.episodes.FindSinglesByTag(profile.ID, tagID, tag.IsDefault)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"section":         section,
+		"tag":             tag,
 		"shows":           shows,
 		"singlesShow":     singlesShow,
 		"singlesEpisodes": singlesEpisodes,
 	})
 }
 
-// AddSingleVideo godoc
-// POST /sections/:id/episodes
+// AddSingleVideoToTag godoc
+// POST /tags/:id/episodes
 // Body: { "url": "..." }
-func (h *SectionHandler) AddSingleVideo(c *gin.Context) {
+func (h *TagHandler) AddSingleVideoToTag(c *gin.Context) {
 	profile := middleware.GetProfile(c)
-	sectionID := c.Param("id")
+	tagID := c.Param("id")
 
 	var body struct {
 		URL string `json:"url" binding:"required"`
@@ -256,13 +241,13 @@ func (h *SectionHandler) AddSingleVideo(c *gin.Context) {
 		return
 	}
 
-	section, err := h.sections.FindByID(sectionID)
-	if err != nil || section == nil || section.OwnerID != profile.ID {
+	tag, err := h.tags.FindByID(tagID)
+	if err != nil || tag == nil || tag.OwnerID != profile.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
 
-	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, sectionID)
+	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, tagID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to ensure singles show: " + err.Error()})
 		return
@@ -288,6 +273,7 @@ func (h *SectionHandler) AddSingleVideo(c *gin.Context) {
 			Title:      entry.Title,
 			Duration:   entry.Duration,
 			OrderIndex: maxOrderIndex + 1 + i,
+			TagIDs:     []string{tagID},
 		})
 	}
 

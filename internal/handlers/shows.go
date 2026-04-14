@@ -15,29 +15,29 @@ import (
 type ShowHandler struct {
 	shows    *repository.ShowRepo
 	episodes *repository.EpisodeRepo
-	sections *repository.SectionRepo
+	tags     *repository.TagRepo
 	ytClient *ytdlp.Client
 }
 
 func NewShowHandler(
 	shows *repository.ShowRepo,
 	episodes *repository.EpisodeRepo,
-	sections *repository.SectionRepo,
+	tags *repository.TagRepo,
 	ytClient *ytdlp.Client,
 ) *ShowHandler {
-	return &ShowHandler{shows: shows, episodes: episodes, sections: sections, ytClient: ytClient}
+	return &ShowHandler{shows: shows, episodes: episodes, tags: tags, ytClient: ytClient}
 }
 
 // CreateShow godoc
 // POST /shows
-// Body: { "playlistUrl": "...", "sectionId": "uuid" (опционально), "title": "..." (для пустых) }
+// Body: { "playlistUrl": "...", "tagIds": ["uuid"] (опционально), "title": "..." (для пустых) }
 func (h *ShowHandler) CreateShow(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
 	var body struct {
-		PlaylistURL string `json:"playlistUrl"`
-		SectionID   string `json:"sectionId"`
-		Title       string `json:"title"`
+		PlaylistURL string   `json:"playlistUrl"`
+		TagIDs      []string `json:"tagIds"`
+		Title       string   `json:"title"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -49,26 +49,28 @@ func (h *ShowHandler) CreateShow(c *gin.Context) {
 		return
 	}
 
-	// Если раздел не указан — используем Default
-	if body.SectionID == "" {
-		defaultSec, err := h.sections.EnsureDefault(profile.ID)
+	// Если теги не указаны — используем Default
+	if len(body.TagIDs) == 0 {
+		defaultTag, err := h.tags.EnsureDefault(profile.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		body.SectionID = defaultSec.ID
+		body.TagIDs = []string{defaultTag.ID}
 	} else {
-		// Проверяем, что раздел принадлежит профилю
-		sec, err := h.sections.FindByID(body.SectionID)
-		if err != nil || sec == nil || sec.OwnerID != profile.ID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sectionId"})
-			return
+		// Проверяем, что все теги принадлежат профилю
+		for _, tid := range body.TagIDs {
+			t, err := h.tags.FindByID(tid)
+			if err != nil || t == nil || t.OwnerID != profile.ID {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tagId: " + tid})
+				return
+			}
 		}
 	}
 
 	show := &models.Show{
-		OwnerID:   profile.ID,
-		SectionID: body.SectionID,
+		OwnerID: profile.ID,
+		TagIDs:  body.TagIDs,
 	}
 
 	var episodes []*models.Episode
@@ -170,15 +172,15 @@ func (h *ShowHandler) DeleteShow(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// MoveShow godoc
-// PATCH /shows/:id/section
-// Body: { "sectionId": "uuid" }
-func (h *ShowHandler) MoveShow(c *gin.Context) {
+// UpdateShowTags godoc
+// PATCH /shows/:id/tags
+// Body: { "tagIds": ["uuid1", "uuid2"] }
+func (h *ShowHandler) UpdateShowTags(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 	showID := c.Param("id")
 
 	var body struct {
-		SectionID string `json:"sectionId" binding:"required"`
+		TagIDs []string `json:"tagIds" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -191,18 +193,20 @@ func (h *ShowHandler) MoveShow(c *gin.Context) {
 		return
 	}
 
-	// Проверяем что целевой раздел принадлежит профилю
-	sec, err := h.sections.FindByID(body.SectionID)
-	if err != nil || sec == nil || sec.OwnerID != profile.ID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sectionId"})
-		return
+	// Проверяем что все целевые теги принадлежат профилю
+	for _, tid := range body.TagIDs {
+		t, err := h.tags.FindByID(tid)
+		if err != nil || t == nil || t.OwnerID != profile.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tagId: " + tid})
+			return
+		}
 	}
 
-	if err := h.shows.UpdateSection(showID, body.SectionID); err != nil {
+	if err := h.shows.UpdateTags(showID, body.TagIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"id": showID, "sectionId": body.SectionID})
+	c.JSON(http.StatusOK, gin.H{"id": showID, "tagIds": body.TagIDs})
 }
 
 // ReverseShow godoc
@@ -327,12 +331,12 @@ func (h *ShowHandler) ReorderEpisodes(c *gin.Context) {
 
 // ReorderShows godoc
 // POST /shows/reorder
-// Body: { "sectionId": "uuid", "orderedIds": ["id1", "id2"] }
+// Body: { "tagId": "uuid", "orderedIds": ["id1", "id2"] }
 func (h *ShowHandler) ReorderShows(c *gin.Context) {
 	profile := middleware.GetProfile(c)
 
 	var body struct {
-		SectionID  string   `json:"sectionId" binding:"required"`
+		TagID      string   `json:"tagId" binding:"required"`
 		OrderedIDs []string `json:"orderedIds" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -340,14 +344,14 @@ func (h *ShowHandler) ReorderShows(c *gin.Context) {
 		return
 	}
 
-	// Проверяем права на раздел
-	sec, err := h.sections.FindByID(body.SectionID)
-	if err != nil || sec == nil || sec.OwnerID != profile.ID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "access denied to section"})
+	// Проверяем права на тег
+	t, err := h.tags.FindByID(body.TagID)
+	if err != nil || t == nil || t.OwnerID != profile.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied to tag"})
 		return
 	}
 
-	if err := h.shows.UpdateOrder(profile.ID, body.SectionID, body.OrderedIDs); err != nil {
+	if err := h.shows.UpdateOrder(profile.ID, body.TagID, body.OrderedIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

@@ -97,7 +97,7 @@ input { font-family: inherit; }
   margin: 0 auto;
   padding: 40px 32px 0;
 }
-.shows-section-title {
+.shows-tag-title {
   font-size: 1.4rem;
   font-weight: 600;
   margin-bottom: 24px;
@@ -634,15 +634,15 @@ input { font-family: inherit; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SECTIONS
+   TAGS
 ═══════════════════════════════════════════════════════════════════════════ */
-.sections-grid {
+.tags-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 20px;
 }
 
-.section-card {
+.tag-card {
   position: relative;
   border-radius: var(--radius-lg);
   padding: 28px 24px 22px;
@@ -654,17 +654,17 @@ input { font-family: inherit; }
   transition: transform var(--transition), box-shadow var(--transition);
   overflow: hidden;
 }
-.section-card::before {
+.tag-card::before {
   content: '';
   position: absolute;
   inset: 0;
   background: rgba(0,0,0,0);
   transition: background var(--transition);
 }
-.section-card:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 12px 40px rgba(0,0,0,.5); }
-.section-card:hover::before { background: rgba(0,0,0,.1); }
+.tag-card:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.tag-card:hover::before { background: rgba(0,0,0,.1); }
 
-.section-card-name {
+.tag-card-name {
   font-size: 1.3rem;
   font-weight: 700;
   color: #fff;
@@ -672,14 +672,14 @@ input { font-family: inherit; }
   position: relative;
   z-index: 1;
 }
-.section-card-count {
+.tag-card-count {
   font-size: .8rem;
   color: rgba(255,255,255,.75);
   margin-top: 4px;
   position: relative;
   z-index: 1;
 }
-.section-default-badge {
+.tag-default-badge {
   position: absolute;
   top: 12px;
   left: 14px;
@@ -694,7 +694,7 @@ input { font-family: inherit; }
   backdrop-filter: blur(4px);
   z-index: 1;
 }
-.section-card-top-actions {
+.tag-card-top-actions {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -702,7 +702,7 @@ input { font-family: inherit; }
   gap: 8px;
   z-index: 10;
 }
-.btn-delete-section {
+.btn-delete-tag {
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -717,18 +717,46 @@ input { font-family: inherit; }
   border: none;
   cursor: pointer;
 }
-.section-card:hover .btn-delete-section { opacity: 1; }
-.btn-delete-section:hover { background: var(--accent); }
+.tag-card:hover .btn-delete-tag { opacity: 1; }
+.btn-delete-tag:hover { background: var(--accent); }
 
-/* ── New section inline form ── */
-.new-section-form {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+/* ── New tag inline form ── */
+.new-tag-form {
   margin-bottom: 24px;
   flex-wrap: wrap;
 }
-.new-section-form .modal-input { margin-bottom: 0; max-width: 320px; }
+
+/* ── Multi-tag selection in modals ── */
+.tag-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.tag-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.tag-checkbox-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+.tag-checkbox-item input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.new-tag-form .modal-input { margin-bottom: 0; max-width: 320px; }
 
 /* ── Show card action buttons (top-right) ── */
 .show-card-actions {

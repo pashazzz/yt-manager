@@ -4,7 +4,7 @@ import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useS
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { api } from '../api/client'
-import type { Show, Episode, Section } from '../types'
+import type { Show, Episode, Tag } from '../types'
 import ShowCard from '../components/ShowCard'
 import EpisodeList from '../components/EpisodeList'
 import AddShowModal from '../components/AddShowModal'
@@ -35,12 +35,12 @@ function SortableShowCard(props: any) {
 }
 
 export default function ShowsPage() {
-  const { sectionId } = useParams<{ sectionId: string }>()
+  const { tagId } = useParams<{ tagId: string }>()
   const navigate = useNavigate()
 
-  const [section, setSection] = useState<Section | null>(null)
+  const [tag, setTag] = useState<Tag | null>(null)
   const [items, setItems] = useState<ShowWithEpisodes[]>([])
-  const [sections, setSections] = useState<Section[]>([]) // все разделы (для модалки и move)
+  const [tags, setTags] = useState<Tag[]>([]) // все теги (для модалки и управления)
   const [singlesShow, setSinglesShow] = useState<Show | null>(null)
   const [singlesEpisodes, setSinglesEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,25 +58,25 @@ export default function ShowsPage() {
   )
 
   useEffect(() => {
-    if (!sectionId) return
+    if (!tagId) return
     load()
-  }, [sectionId])
+  }, [tagId])
 
   async function load() {
     try {
       setLoading(true)
-      const [sectionData, allSections] = await Promise.all([
-        api.getSectionShows(sectionId!),
-        api.getSections(),
+      const [tagData, allTags] = await Promise.all([
+        api.getTagItems(tagId!),
+        api.getTags(),
       ])
-      setSection(sectionData.section)
-      setSections(allSections)
-      setSinglesShow(sectionData.singlesShow ?? null)
-      setSinglesEpisodes(sectionData.singlesEpisodes ?? [])
+      setTag(tagData.tag)
+      setTags(allTags)
+      setSinglesShow(tagData.singlesShow ?? null)
+      setSinglesEpisodes(tagData.singlesEpisodes ?? [])
 
       // Загружаем эпизоды для каждого шоу (для прогресса на карточках)
       const withEpisodes = await Promise.all(
-        sectionData.shows.map(async show => {
+        tagData.shows.map(async (show: Show) => {
           const detail = await api.getShow(show.id).catch(() => ({ show, episodes: [] }))
           return { show: detail.show, episodes: detail.episodes }
         }),
@@ -91,8 +91,8 @@ export default function ShowsPage() {
 
   const handleCreated = async (show: Show) => {
     const detail = await api.getShow(show.id).catch(() => ({ show, episodes: [] }))
-    // Показываем шоу только если оно в текущем разделе
-    if (show.sectionId === sectionId) {
+    // Показываем шоу только если оно содержит текущий тег
+    if ((show.tagIds || []).includes(tagId!)) {
       setItems(prev => [{ show: detail.show, episodes: detail.episodes }, ...prev])
     }
   }
@@ -106,21 +106,27 @@ export default function ShowsPage() {
     }
   }
 
-  const handleMove = async (showId: string, targetSectionId: string) => {
+  const handleMove = async (showId: string, targetTagIds: string[]) => {
     try {
-      await api.moveShow(showId, targetSectionId)
-      // Убираем шоу из текущего раздела
-      setItems(prev => prev.filter(i => i.show.id !== showId))
+      await api.updateShowTags(showId, targetTagIds)
+      
+      // Если шоу больше не содержит текущий тег — убираем его из списка
+      if (!(targetTagIds || []).includes(tagId!)) {
+        setItems(prev => prev.filter(i => i.show.id !== showId))
+      } else {
+        // Иначе просто обновляем теги в локальном стойте (хотя в текущем UI это мало на что влияет в этом списке)
+        setItems(prev => prev.map(i => i.show.id === showId ? { ...i, show: { ...i.show, tagIds: targetTagIds } } : i))
+      }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Ошибка перемещения')
+      alert(err instanceof Error ? err.message : 'Ошибка обновления тегов')
     }
   }
 
   const handleAddSingleVideo = async (videoUrl: string) => {
-    if (!sectionId) return
+    if (!tagId) return
     try {
       setVideoLoading(true)
-      const res = await api.addSectionEpisode(sectionId, videoUrl)
+      const res = await api.addTagEpisode(tagId, videoUrl)
       setSinglesEpisodes(prev => [...prev, ...res.episodes])
       setShowVideoModal(false)
       if (!singlesShow) load() // перезагрузка, если скрытое шоу только что создано
@@ -131,12 +137,18 @@ export default function ShowsPage() {
     }
   }
 
-  const handleMoveSingle = async (episodeId: string, targetSectionId: string) => {
+  const handleMoveSingle = async (episodeId: string, targetTagIds: string[]) => {
     try {
-      await api.moveEpisode(episodeId, targetSectionId)
-      setSinglesEpisodes(prev => prev.filter(e => e.id !== episodeId))
+      await api.updateEpisodeTags(episodeId, targetTagIds)
+      
+      // Убираем из вида, если текущего тега больше нет в списке
+      if (!(targetTagIds || []).includes(tagId!)) {
+        setSinglesEpisodes(prev => prev.filter(e => e.id !== episodeId))
+      } else {
+        setSinglesEpisodes(prev => prev.map(e => e.id === episodeId ? { ...e, tagIds: targetTagIds } : e))
+      }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Ошибка перемещения видео')
+      alert(err instanceof Error ? err.message : 'Ошибка обновления тегов видео')
     }
   }
 
@@ -155,8 +167,8 @@ export default function ShowsPage() {
       const newItems = arrayMove(items, oldIndex, newIndex)
       setItems(newItems)
 
-      if (sectionId) {
-        api.reorderShows(sectionId, newItems.map(i => i.show.id)).catch(console.error)
+      if (tagId) {
+        api.reorderShows(tagId, newItems.map(i => i.show.id)).catch(console.error)
       }
     }
   }
@@ -172,7 +184,19 @@ export default function ShowsPage() {
     }
   }
 
-  const defaultSection = sections.find(s => s.isDefault)
+  const handleDeleteEpisode = async (id: string) => {
+    if (!window.confirm('Удалить это видео?')) return
+    try {
+      await api.deleteEpisode(id)
+      // Обновляем оба списка на случай если видео было в синглах или в каком-то шоу (хотя в ShowsPage оно в синглах)
+      setSinglesEpisodes(prev => prev.filter(e => e.id !== id))
+      setItems(prev => prev.map(i => ({ ...i, episodes: i.episodes.filter(e => e.id !== id) })))
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка удаления')
+    }
+  }
+
+  const defaultTag = tags.find(s => s.isDefault)
 
   if (loading) return <div className="page-loader"><div className="spinner" /></div>
   if (error) return (
@@ -185,8 +209,8 @@ export default function ShowsPage() {
   return (
     <div className="shows-page">
       <header className="app-header">
-        <button className="btn-back-inline" onClick={() => navigate('/')}>← Разделы</button>
-        <span className="app-logo" style={{ fontSize: '1rem' }}>{section?.name}</span>
+        <button className="btn-back-inline" onClick={() => navigate('/')}>← Теги</button>
+        <span className="app-logo" style={{ fontSize: '1rem' }}>{tag?.name}</span>
         <button className="btn-add" onClick={() => setShowModal(true)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M12 5v14M5 12h14" strokeLinecap="round" />
@@ -199,7 +223,7 @@ export default function ShowsPage() {
         {items.length === 0 && singlesEpisodes.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🎬</div>
-            <h3>Раздел пуст</h3>
+            <h3>Тег пуст</h3>
             <p>Добавь YouTube-плейлист или одиночные видео</p>
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <button className="btn-primary" onClick={() => setShowModal(true)}>
@@ -214,7 +238,7 @@ export default function ShowsPage() {
           <>
             {items.length > 0 && (
               <>
-                <h2 className="shows-section-title">
+                <h2 className="shows-tag-title">
                   Шоу · {items.length}
                 </h2>
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEndShows}>
@@ -225,7 +249,7 @@ export default function ShowsPage() {
                           key={show.id}
                           show={show}
                           episodes={episodes}
-                          sections={sections}
+                          tags={tags}
                           onDelete={handleDelete}
                           onMove={handleMove}
                         />
@@ -237,7 +261,7 @@ export default function ShowsPage() {
             )}
 
             <div style={{ marginTop: items.length > 0 ? '48px' : '0' }}>
-              <h2 className="shows-section-title">Отдельные видео</h2>
+              <h2 className="shows-tag-title">Отдельные видео</h2>
               <EpisodeList
                 episodes={singlesEpisodes}
                 currentId=""
@@ -247,8 +271,9 @@ export default function ShowsPage() {
                 isReorderable={true}
                 onReorder={handleReorderSingles}
                 variant="inline"
-                sections={sections.filter(s => s.id !== sectionId)}
+                tags={tags}
                 onMove={handleMoveSingle}
+                onDelete={handleDeleteEpisode}
               />
             </div>
           </>
@@ -257,8 +282,8 @@ export default function ShowsPage() {
 
       {showModal && (
         <AddShowModal
-          sections={sections}
-          defaultSectionId={sectionId ?? defaultSection?.id ?? ''}
+          tags={tags}
+          defaultTagId={tagId ?? defaultTag?.id ?? ''}
           onCreated={handleCreated}
           onClose={() => setShowModal(false)}
         />

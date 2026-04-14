@@ -1,12 +1,12 @@
 import { useNavigate } from 'react-router-dom'
-import type { Show, Episode, Section } from '../types'
+import type { Show, Episode, Tag } from '../types'
 
 interface Props {
   show: Show
   episodes: Episode[]
-  sections: Section[]
+  tags: Tag[]
   onDelete: (id: string) => void
-  onMove: (showId: string, sectionId: string) => void
+  onMove: (showId: string, tagIds: string[]) => void
   listeners?: any
   setNodeRef?: (node: HTMLElement | null) => void
   style?: React.CSSProperties
@@ -16,7 +16,7 @@ function thumbUrl(videoId: string | undefined) {
   return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : ''
 }
 
-export default function ShowCard({ show, episodes, sections, onDelete, onMove, listeners, setNodeRef, style }: Props) {
+export default function ShowCard({ show, episodes, tags, onDelete, onMove, listeners, setNodeRef, style }: Props) {
   const navigate = useNavigate()
   const firstEp = episodes[0]
   const watched = episodes.filter(e => e.isWatched).length
@@ -29,13 +29,26 @@ export default function ShowCard({ show, episodes, sections, onDelete, onMove, l
 
   const handleMove = (e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation()
-    const targetSection = e.target.value
-    if (targetSection) onMove(show.id, targetSection)
+    const targetTagId = e.target.value
+    if (!targetTagId) return
+
+    const isAssigned = (show.tagIds || []).includes(targetTagId)
+    let newTagIds: string[]
+    if (isAssigned) {
+      newTagIds = show.tagIds.filter(id => id !== targetTagId)
+      // Если это последний тег — можно либо запретить, либо позволить.
+      // Обычно лучше оставить хотя бы один, но бэкенд позволяет пустоту.
+    } else {
+      newTagIds = [...show.tagIds, targetTagId]
+    }
+    
+    onMove(show.id, newTagIds)
     // reset select
     e.target.value = ""
   }
 
-  const otherSections = sections.filter(s => s.id !== show.sectionId)
+  // Теперь показываем все теги, чтобы можно было как добавлять, так и удалять
+  const allTags = tags
 
   return (
     <div 
@@ -58,13 +71,13 @@ export default function ShowCard({ show, episodes, sections, onDelete, onMove, l
 
       {/* Кнопки управления */}
       <div className="show-card-actions">
-        {otherSections.length > 0 && (
+        {allTags.length > 0 && (
           <div style={{ position: 'relative', display: 'flex' }}>
             <button
               className="btn-card-action"
-              title="Переместить в раздел"
+              title="Управление тегами"
             >
-              ⋯
+              #
             </button>
             <select
               className="native-dropdown-overlay"
@@ -72,10 +85,15 @@ export default function ShowCard({ show, episodes, sections, onDelete, onMove, l
               onChange={handleMove}
               onClick={e => e.stopPropagation()}
             >
-              <option value="" disabled>Переместить в</option>
-              {otherSections.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
+              <option value="" disabled>Теги...</option>
+              {allTags.map(t => {
+                const isAssigned = (show.tagIds || []).includes(t.id)
+                return (
+                  <option key={t.id} value={t.id}>
+                    {isAssigned ? '✓ ' : ''}{t.name}
+                  </option>
+                )
+              })}
             </select>
           </div>
         )}

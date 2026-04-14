@@ -32,7 +32,7 @@ func (r *ShowRepo) Create(s *models.Show) error {
 		"title":       s.Title,
 		"playlistUrl": s.PlaylistURL,
 		"ownerId":      s.OwnerID,
-		"sectionId":    s.SectionID,
+		"tagIds":       s.TagIDs,
 		"reverseOrder": s.ReverseOrder,
 		"isSingles":    s.IsSingles,
 		"orderIndex":   s.OrderIndex,
@@ -58,10 +58,8 @@ func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 	return shows, nil
 }
 
-// FindBySection возвращает шоу, принадлежащие конкретному разделу.
-// Если includeUncategorized=true, также возвращает шоу без sectionId
-// (созданные до введения разделов) — используется для раздела Default.
-func (r *ShowRepo) FindBySection(ownerID, sectionID string, includeUncategorized bool) ([]*models.Show, error) {
+// FindByTag возвращает шоу, принадлежащие конкретному тегу.
+func (r *ShowRepo) FindByTag(ownerID, tagID string, includeUncategorized bool) ([]*models.Show, error) {
 	all, err := r.FindByOwner(ownerID)
 	if err != nil {
 		return nil, err
@@ -72,9 +70,18 @@ func (r *ShowRepo) FindBySection(ownerID, sectionID string, includeUncategorized
 		if s.IsSingles {
 			continue // Не возвращаем служебное шоу в списке обычных шоу
 		}
-		if s.SectionID == sectionID {
+		
+		isTagged := false
+		for _, tid := range s.TagIDs {
+			if tid == tagID {
+				isTagged = true
+				break
+			}
+		}
+
+		if isTagged {
 			result = append(result, s)
-		} else if includeUncategorized && s.SectionID == "" {
+		} else if includeUncategorized && len(s.TagIDs) == 0 {
 			result = append(result, s)
 		}
 	}
@@ -97,10 +104,10 @@ func (r *ShowRepo) FindByID(id string) (*models.Show, error) {
 	return docToShow(doc), nil
 }
 
-// UpdateSection перемещает шоу в другой раздел.
-func (r *ShowRepo) UpdateSection(id, sectionID string) error {
+// UpdateTags обновляет теги шоу.
+func (r *ShowRepo) UpdateTags(id string, tagIDs []string) error {
 	q := query.NewQuery(db.CollectionShows).Where(query.Field("_id").Eq(id))
-	return r.db.Update(q, map[string]any{"sectionId": sectionID})
+	return r.db.Update(q, map[string]any{"tagIds": tagIDs})
 }
 
 // UpdateReverseOrder меняет порядок сортировки эпизодов.
@@ -116,14 +123,13 @@ func (r *ShowRepo) Delete(id string) error {
 	)
 }
 
-// UpdateOrder обновляет orderIndex для списка шоу внутри раздела.
-func (r *ShowRepo) UpdateOrder(ownerID, sectionID string, orderedIDs []string) error {
+// UpdateOrder обновляет orderIndex для списка шоу внутри тега.
+func (r *ShowRepo) UpdateOrder(ownerID, tagID string, orderedIDs []string) error {
 	for i, id := range orderedIDs {
-		// Мы проверяем и ownerId и sectionId для безопасности.
+		// Мы проверяем и ownerId для безопасности.
 		q := query.NewQuery(db.CollectionShows).Where(
 			query.Field("_id").Eq(id).
-				And(query.Field("ownerId").Eq(ownerID)).
-				And(query.Field("sectionId").Eq(sectionID)),
+				And(query.Field("ownerId").Eq(ownerID)),
 		)
 		if err := r.db.Update(q, map[string]any{"orderIndex": i}); err != nil {
 			return err
@@ -132,12 +138,12 @@ func (r *ShowRepo) UpdateOrder(ownerID, sectionID string, orderedIDs []string) e
 	return nil
 }
 
-// EnsureSinglesShow возвращает специальное скрытое шоу для отдельных видео раздела,
+// EnsureSinglesShow возвращает специальное скрытое шоу для отдельных видео тега,
 // или создаёт его, если оно ещё не существует.
-func (r *ShowRepo) EnsureSinglesShow(ownerID, sectionID string) (*models.Show, error) {
+func (r *ShowRepo) EnsureSinglesShow(ownerID, tagID string) (*models.Show, error) {
 	q := query.NewQuery(db.CollectionShows).
 		Where(query.Field("ownerId").Eq(ownerID).
-			And(query.Field("sectionId").Eq(sectionID)).
+			And(query.Field("tagIds").Contains(tagID)).
 			And(query.Field("isSingles").Eq(true)))
 
 	doc, err := r.db.FindFirst(q)
@@ -151,7 +157,7 @@ func (r *ShowRepo) EnsureSinglesShow(ownerID, sectionID string) (*models.Show, e
 	s := &models.Show{
 		Title:       "Отдельные видео",
 		OwnerID:     ownerID,
-		SectionID:   sectionID,
+		TagIDs:      []string{tagID},
 		IsSingles:   true,
 	}
 	if err := r.Create(s); err != nil {
@@ -164,12 +170,33 @@ func (r *ShowRepo) EnsureSinglesShow(ownerID, sectionID string) (*models.Show, e
 
 func docToShow(d *document.Document) *models.Show {
 	createdAt, _ := d.Get("createdAt").(time.Time)
+	
+	// Миграция: если нет tagIds, но есть sectionId, используем его как единственный тег
+	tagIDs := []string{}
+	if d.Has("tagIds") {
+		if raw, ok := d.Get("tagIds").([]any); ok {
+			for _, v := range raw {
+				if s, ok := v.(string); ok {
+					tagIDs = append(tagIDs, s)
+				}
+			}
+		} else if raw, ok := d.Get("tagIds").([]string); ok {
+			tagIDs = raw
+		}
+	}
+	
+	if len(tagIDs) == 0 && d.Has("sectionId") {
+		if sid, ok := d.Get("sectionId").(string); ok && sid != "" {
+			tagIDs = []string{sid}
+		}
+	}
+
 	return &models.Show{
 		ID:           d.ObjectId(),
 		Title:        stringField(d, "title"),
 		PlaylistURL:  stringField(d, "playlistUrl"),
 		OwnerID:      stringField(d, "ownerId"),
-		SectionID:    stringField(d, "sectionId"),
+		TagIDs:       tagIDs,
 		ReverseOrder: showBoolField(d, "reverseOrder"),
 		IsSingles:    showBoolField(d, "isSingles"),
 		OrderIndex:   showIntField(d, "orderIndex"),

@@ -6,7 +6,7 @@ import (
 
 const (
 	CollectionProfiles = "profiles"
-	CollectionSections = "sections"
+	CollectionTags     = "sections" // Название в БД оставляем для совместимости
 	CollectionShows    = "shows"
 	CollectionEpisodes = "episodes"
 )
@@ -19,7 +19,7 @@ func Open(dataDir string) (*clover.DB, error) {
 		return nil, err
 	}
 
-	for _, col := range []string{CollectionProfiles, CollectionSections, CollectionShows, CollectionEpisodes} {
+	for _, col := range []string{CollectionProfiles, CollectionTags, CollectionShows, CollectionEpisodes} {
 		exists, err := db.HasCollection(col)
 		if err != nil {
 			return nil, err

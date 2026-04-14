@@ -3,7 +3,7 @@ export interface Show {
   title: string
   playlistUrl: string
   ownerId: string
-  sectionId: string
+  tagIds: string[]
   reverseOrder: boolean
   isSingles: boolean
   orderIndex: number
@@ -19,9 +19,10 @@ export interface Episode {
   currentTime: number
   isWatched: boolean
   orderIndex: number
+  tagIds?: string[]
 }
 
-export interface Section {
+export interface Tag {
   id: string
   name: string
   ownerId: string
@@ -31,7 +32,7 @@ export interface Section {
   createdAt: string
 }
 
-export interface SectionInfo extends Section {
+export interface TagInfo extends Tag {
   showCount: number
   episodeCount: number
   firstVideoId: string
@@ -42,8 +43,8 @@ export interface ShowDetail {
   episodes: Episode[]
 }
 
-export interface SectionShows {
-  section: Section
+export interface TagItems {
+  tag: Tag
   shows: Show[]
   singlesShow?: Show
   singlesEpisodes?: Episode[]

@@ -2,7 +2,7 @@ import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useS
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import type { Episode, Section } from '../types'
+import type { Episode, Tag } from '../types'
 
 interface Props {
   episodes: Episode[]
@@ -13,8 +13,9 @@ interface Props {
   isReorderable?: boolean
   onReorder?: (episodes: Episode[]) => void
   variant?: 'sidebar' | 'inline'
-  sections?: Section[]
-  onMove?: (episodeId: string, sectionId: string) => void
+  tags?: Tag[]
+  onMove?: (episodeId: string, tagIds: string[]) => void
+  onDelete?: (episodeId: string) => void
 }
 
 function fmtDuration(sec: number): string {
@@ -30,7 +31,7 @@ function thumbUrl(videoId: string) {
   return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
 }
 
-function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, sections, onMove }: any) {
+function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, tags, onMove, onDelete }: any) {
   const progress = ep.duration > 0 ? Math.min(100, (ep.currentTime / ep.duration) * 100) : 0
 
   return (
@@ -68,38 +69,75 @@ function EpisodeItem({ ep, isActive, onSelect, onToggleWatched, isReorderable, l
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        {sections && sections.length > 0 && onMove && (
-          <div style={{ position: 'relative', display: 'flex', marginRight: '8px' }}>
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6, padding: '0 4px' }}>⋯</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {tags && tags.length > 0 && onMove && (
+          <div style={{ position: 'relative', display: 'flex' }}>
+            <button
+              className="btn-ghost"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6, padding: '0 4px', color: 'var(--text)' }}
+              title="Управление тегами"
+            >
+              #
+            </button>
             <select
               className="native-dropdown-overlay"
               value=""
-              onChange={e => { e.stopPropagation(); onMove(ep.id, e.target.value); e.target.value = "" }}
+              onChange={e => {
+                e.stopPropagation()
+                const targetTagId = e.target.value
+                if (!targetTagId) return
+
+                const currentIds = ep.tagIds || []
+                const isAssigned = currentIds.includes(targetTagId)
+                const newIds = isAssigned
+                  ? currentIds.filter((id: string) => id !== targetTagId)
+                  : [...currentIds, targetTagId]
+
+                onMove(ep.id, newIds)
+                e.target.value = ""
+              }}
               onClick={e => e.stopPropagation()}
             >
-              <option value="" disabled>Переместить в</option>
-              {sections.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              <option value="" disabled>Теги...</option>
+              {tags.map((t: any) => {
+                const isAssigned = (ep.tagIds || []).includes(t.id)
+                return (
+                  <option key={t.id} value={t.id}>
+                    {isAssigned ? '✓ ' : ''}{t.name}
+                  </option>
+                )
+              })}
             </select>
           </div>
         )}
 
         {onToggleWatched && (
           <div className="episode-action-btn" onClick={e => { e.stopPropagation(); onToggleWatched(ep) }}>
-          <button 
-            title={ep.isWatched ? 'Отметить как непросмотренное' : 'Отметить как просмотренное'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }}
-          >
-            {ep.isWatched ? '✕' : '✓'}
-          </button>
-        </div>
-      )}
+            <button
+              title={ep.isWatched ? 'Отметить как непросмотренное' : 'Отметить как просмотренное'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }}
+            >
+              {ep.isWatched ? '↻' : '✓'}
+            </button>
+          </div>
+        )}
+
+        {onDelete && (
+          <div className="episode-action-btn" onClick={e => { e.stopPropagation(); onDelete(ep.id) }}>
+            <button
+              title="Удалить эпизод"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6, color: '#f44336' }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function SortableEpisode({ ep, isActive, onSelect, onToggleWatched, sections, onMove }: any) {
+function SortableEpisode({ ep, isActive, onSelect, onToggleWatched, tags, onMove, onDelete }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ep.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -118,13 +156,14 @@ function SortableEpisode({ ep, isActive, onSelect, onToggleWatched, sections, on
       listeners={{ ...attributes, ...listeners }}
       setNodeRef={setNodeRef}
       style={style}
-      sections={sections}
+      tags={tags}
       onMove={onMove}
+      onDelete={onDelete}
     />
   )
 }
 
-export default function EpisodeList({ episodes, currentId, onSelect, onToggleWatched, onAddVideo, isReorderable, onReorder, variant = 'sidebar', sections, onMove }: Props) {
+export default function EpisodeList({ episodes, currentId, onSelect, onToggleWatched, onAddVideo, isReorderable, onReorder, variant = 'sidebar', tags, onMove, onDelete }: Props) {
   const watchedCount = episodes.filter(e => e.isWatched).length
 
   const sensors = useSensors(
@@ -148,11 +187,11 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
     }
   }
 
-  const Tag = variant === 'inline' ? 'div' : 'aside'
+  const TagComp = variant === 'inline' ? 'div' : 'aside'
   const className = variant === 'inline' ? 'episode-list-inline' : 'episode-list-sidebar'
 
   return (
-    <Tag className={className}>
+    <TagComp className={className}>
       <div className="episode-list-header">
         <div className="episode-list-title">Эпизоды</div>
         <div className="episode-list-count">
@@ -171,8 +210,9 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
                   isActive={ep.id === currentId}
                   onSelect={onSelect}
                   onToggleWatched={onToggleWatched}
-                  sections={sections}
+                  tags={tags}
                   onMove={onMove}
+                  onDelete={onDelete}
                 />
               ))}
             </SortableContext>
@@ -186,20 +226,21 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
               onSelect={onSelect}
               onToggleWatched={onToggleWatched}
               isReorderable={false}
-              sections={sections}
+              tags={tags}
               onMove={onMove}
+              onDelete={onDelete}
             />
           ))
         )}
-        
+
         {onAddVideo && (
-            <div className="episode-list-add" style={{ padding: '10px' }}>
-              <button className="btn-ghost" style={{ width: '100%', fontSize: '0.85rem' }} onClick={onAddVideo}>
-                + Добавить видео
-              </button>
-            </div>
+          <div className="episode-list-add" style={{ padding: '10px' }}>
+            <button className="btn-ghost" style={{ width: '100%', fontSize: '0.85rem' }} onClick={onAddVideo}>
+              + Добавить видео
+            </button>
+          </div>
         )}
       </div>
-    </Tag>
+    </TagComp>
   )
 }

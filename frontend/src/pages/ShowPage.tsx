@@ -34,9 +34,9 @@ export default function ShowPage() {
       .then(detail => {
         setShow(detail.show)
         setEpisodes(detail.episodes)
-        
+
         const list = detail.show.reverseOrder ? [...detail.episodes].reverse() : detail.episodes
-        
+
         const searchParams = new URLSearchParams(location.search)
         const reqEpisode = searchParams.get('episode')
         const exact = reqEpisode ? list.find(e => e.id === reqEpisode) : undefined
@@ -106,6 +106,19 @@ export default function ShowPage() {
     }
   }
 
+  const handleDeleteEpisode = async (id: string) => {
+    if (!window.confirm('Удалить этот эпизод?')) return
+    try {
+      await api.deleteEpisode(id)
+      setEpisodes(prev => prev.filter(e => e.id !== id))
+      if (currentEpisode?.id === id) {
+        setCurrentEpisode(null)
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Ошибка удаления')
+    }
+  }
+
   if (loading) {
     return (
       <div className="page-loader">
@@ -127,13 +140,13 @@ export default function ShowPage() {
     <div className="show-page">
       {/* ── Header ── */}
       <header className="show-page-header">
-        <button className="btn-back" onClick={() => navigate(`/sections/${show.sectionId}`)}>
+        <button className="btn-back" onClick={() => navigate(-1)}>
           ← Назад
         </button>
         <h1 className="show-page-title">{show.title}</h1>
         {show.playlistUrl !== '' && (
-          <button 
-            className="btn-ghost" 
+          <button
+            className="btn-ghost"
             onClick={handleToggleReverse}
             title="Изменить порядок воспроизведения"
             style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
@@ -181,6 +194,7 @@ export default function ShowPage() {
           onToggleWatched={handleToggleWatched}
           isReorderable={show.playlistUrl === ''}
           onReorder={handleReorder}
+          onDelete={handleDeleteEpisode}
         />
       </div>
 

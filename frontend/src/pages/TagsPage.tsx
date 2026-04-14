@@ -4,11 +4,11 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { SectionInfo } from '../types'
-import SectionCard from '../components/SectionCard'
+import type { TagInfo } from '../types'
+import TagCard from '../components/TagCard'
 
-function SortableSection({ section, index, onDelete, onToggleThumb }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id })
+function SortableTag({ tag, index, onDelete, onToggleThumb }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tag.id })
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -19,8 +19,8 @@ function SortableSection({ section, index, onDelete, onToggleThumb }: any) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <SectionCard
-        section={section}
+      <TagCard
+        tag={tag}
         index={index}
         onDelete={onDelete}
         onToggleThumb={onToggleThumb}
@@ -30,8 +30,8 @@ function SortableSection({ section, index, onDelete, onToggleThumb }: any) {
 }
 
 
-export default function SectionsPage() {
-  const [sections, setSections] = useState<SectionInfo[]>([])
+export default function TagsPage() {
+  const [tags, setTags] = useState<TagInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newName, setNewName] = useState('')
@@ -51,8 +51,8 @@ export default function SectionsPage() {
   async function load() {
     try {
       setLoading(true)
-      const list = await api.getSections()
-      setSections(list)
+      const list = await api.getTags()
+      setTags(list)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
     } finally {
@@ -66,13 +66,13 @@ export default function SectionsPage() {
     if (!name) return
     setCreating(true)
     try {
-      const s = await api.createSection(name)
-      // Временно добавляем как SectionInfo для UI
-      setSections(prev => [...prev, { ...s, showCount: 0, episodeCount: 0, firstVideoId: '' }])
+      const s = await api.createTag(name)
+      // Временно добавляем как TagInfo для UI
+      setTags(prev => [...prev, { ...s, showCount: 0, episodeCount: 0, firstVideoId: '' }])
       setNewName('')
       setShowForm(false)
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Ошибка создания раздела')
+      alert(err instanceof Error ? err.message : 'Ошибка создания тега')
     } finally {
       setCreating(false)
     }
@@ -80,9 +80,9 @@ export default function SectionsPage() {
 
   async function handleDelete(id: string) {
     try {
-      await api.deleteSection(id)
-      setSections(prev => prev.filter(s => s.id !== id))
-      // Перезагружаем счётчики (шоу могли переехать в Default)
+      await api.deleteTag(id)
+      setTags(prev => prev.filter(s => s.id !== id))
+      // Перезагружаем счётчики (элементы могли изменить принадлежность)
       load()
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Ошибка удаления')
@@ -91,8 +91,8 @@ export default function SectionsPage() {
 
   async function handleToggleThumb(id: string, useThumb: boolean) {
     try {
-      await api.updateSectionSettings(id, useThumb)
-      setSections(prev => prev.map(s => s.id === id ? { ...s, useThumb } : s))
+      await api.updateTagSettings(id, useThumb)
+      setTags(prev => prev.map(s => s.id === id ? { ...s, useThumb } : s))
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Ошибка обновления')
     }
@@ -101,12 +101,12 @@ export default function SectionsPage() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (over && active.id !== over.id) {
-      setSections(items => {
+      setTags(items => {
         const oldIndex = items.findIndex(i => i.id === active.id)
         const newIndex = items.findIndex(i => i.id === over.id)
         const newItems = arrayMove(items, oldIndex, newIndex)
 
-        api.reorderSections(newItems.map(i => i.id)).catch(console.error)
+        api.reorderTags(newItems.map(i => i.id)).catch(console.error)
         return newItems
       })
     }
@@ -128,17 +128,17 @@ export default function SectionsPage() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M12 5v14M5 12h14" strokeLinecap="round" />
           </svg>
-          Новый раздел
+          Новый тег
         </button>
       </header>
 
       <main className="shows-content">
         {showForm && (
-          <form className="new-section-form" onSubmit={handleCreate}>
+          <form className="new-tag-form" onSubmit={handleCreate}>
             <input
               className="modal-input"
               style={{ marginBottom: 0 }}
-              placeholder="Название раздела"
+              placeholder="Название тега"
               value={newName}
               onChange={e => setNewName(e.target.value)}
               autoFocus
@@ -153,22 +153,22 @@ export default function SectionsPage() {
           </form>
         )}
 
-        {sections.length === 0 ? (
+        {tags.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">📂</div>
-            <h3>Нет разделов</h3>
-            <p>Разделы создаются автоматически при первом добавлении шоу</p>
+            <div className="empty-state-icon">🏷</div>
+            <h3>Нет тегов</h3>
+            <p>Теги помогают группировать ваши шоу и видео</p>
           </div>
         ) : (
           <>
-            <h2 className="shows-section-title">Разделы</h2>
+            <h2 className="shows-tag-title">Теги</h2>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={sections} strategy={rectSortingStrategy}>
-                <div className="sections-grid">
-                  {sections.map((s, i) => (
-                    <SortableSection
+              <SortableContext items={tags} strategy={rectSortingStrategy}>
+                <div className="tags-grid">
+                  {tags.map((s, i) => (
+                    <SortableTag
                       key={s.id}
-                      section={s}
+                      tag={s}
                       index={i}
                       onDelete={handleDelete}
                       onToggleThumb={handleToggleThumb}

@@ -1,9 +1,9 @@
 import type {
   Show,
   ShowDetail,
-  Section,
-  SectionInfo,
-  SectionShows,
+  Tag,
+  TagInfo,
+  TagItems,
   Episode,
   CreateShowResponse,
   ProgressResponse,
@@ -25,45 +25,45 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // ── Разделы ───────────────────────────────────────────────────────────────
-  getSections: () => request<SectionInfo[]>('/sections'),
-  createSection: (name: string) =>
-    request<Section>('/sections', {
+  // ── Теги ──────────────────────────────────────────────────────────────────
+  getTags: () => request<TagInfo[]>('/tags'),
+  createTag: (name: string) =>
+    request<Tag>('/tags', {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
-  deleteSection: (id: string) => request<void>(`/sections/${id}/delete`, { method: 'POST' }),
-  reorderSections: (orderedIds: string[]) =>
-    request<void>('/sections/reorder', {
+  deleteTag: (id: string) => request<void>(`/tags/${id}/delete`, { method: 'POST' }),
+  reorderTags: (orderedIds: string[]) =>
+    request<void>('/tags/reorder', {
       method: 'POST',
       body: JSON.stringify({ orderedIds }),
     }),
-  updateSectionSettings: (id: string, useThumb: boolean) =>
-    request<void>(`/sections/${id}/settings`, {
+  updateTagSettings: (id: string, useThumb: boolean) =>
+    request<void>(`/tags/${id}/settings`, {
       method: 'POST',
       body: JSON.stringify({ useThumb }),
     }),
-  getSectionShows: (id: string) =>
-    request<SectionShows>(`/sections/${id}/shows`),
+  getTagItems: (id: string) =>
+    request<TagItems>(`/tags/${id}/items`),
 
   // ── Шоу ──────────────────────────────────────────────────────────────────
   getShows: () => request<Show[]>('/shows'),
-  createShow: (playlistUrl: string, sectionId: string, title?: string) =>
+  createShow: (playlistUrl: string, tagIds: string[], title?: string) =>
     request<CreateShowResponse>('/shows', {
       method: 'POST',
-      body: JSON.stringify({ playlistUrl, sectionId, title }),
+      body: JSON.stringify({ playlistUrl, tagIds, title }),
     }),
-  reorderShows: (sectionId: string, orderedIds: string[]) =>
+  reorderShows: (tagId: string, orderedIds: string[]) =>
     request<void>('/shows/reorder', {
       method: 'POST',
-      body: JSON.stringify({ sectionId, orderedIds }),
+      body: JSON.stringify({ tagId, orderedIds }),
     }),
   getShow: (id: string) => request<ShowDetail>(`/shows/${id}`),
   deleteShow: (id: string) => request<void>(`/shows/${id}/delete`, { method: 'POST' }),
-  moveShow: (id: string, sectionId: string) =>
-    request<{ id: string; sectionId: string }>(`/shows/${id}/section`, {
+  updateShowTags: (id: string, tagIds: string[]) =>
+    request<{ id: string; tagIds: string[] }>(`/shows/${id}/tags`, {
       method: 'POST',
-      body: JSON.stringify({ sectionId }),
+      body: JSON.stringify({ tagIds }),
     }),
   updateReverseOrder: (id: string, reverseOrder: boolean) =>
     request<{ id: string; reverseOrder: boolean }>(`/shows/${id}/reverse`, {
@@ -75,13 +75,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ url }),
     }),
-  moveEpisode: (episodeId: string, sectionId: string) =>
-    request<void>(`/episodes/${episodeId}/move`, {
+  updateEpisodeTags: (episodeId: string, tagIds: string[]) =>
+    request<void>(`/episodes/${episodeId}/tags`, {
       method: 'POST',
-      body: JSON.stringify({ sectionId }),
+      body: JSON.stringify({ tagIds }),
     }),
-  addSectionEpisode: (sectionId: string, url: string) =>
-    request<{ episodes: Episode[] }>(`/sections/${sectionId}/episodes`, {
+  addTagEpisode: (tagId: string, url: string) =>
+    request<{ episodes: Episode[] }>(`/tags/${tagId}/episodes`, {
       method: 'POST',
       body: JSON.stringify({ url }),
     }),
@@ -97,4 +97,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ currentTime, isWatched }),
     }),
+  deleteEpisode: (id: string) =>
+    request<void>(`/episodes/${id}/delete`, {
+      method: 'POST',
+    }),
+  listEpisodes: () => request<Episode[]>('/episodes'),
 }
