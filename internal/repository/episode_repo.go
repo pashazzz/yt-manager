@@ -221,9 +221,14 @@ func (r *EpisodeRepo) MoveEpisode(id string, targetShowID string, newOrderIndex 
 // --- helpers ---
 
 func episodeToDoc(ep *models.Episode) *document.Document {
+	provider := ep.Provider
+	if provider == "" {
+		provider = "youtube"
+	}
 	return document.NewDocumentOf(map[string]any{
 		"_id":         ep.ID,
 		"showId":      ep.ShowID,
+		"provider":    provider,
 		"videoId":     ep.VideoID,
 		"title":       ep.Title,
 		"duration":    ep.Duration,
@@ -244,9 +249,16 @@ func docToEpisode(d *document.Document) *models.Episode {
 		}
 	}
 
+	// Обратная совместимость: старые записи без provider считаем YouTube.
+	provider := stringField(d, "provider")
+	if provider == "" {
+		provider = "youtube"
+	}
+
 	return &models.Episode{
 		ID:          d.ObjectId(),
 		ShowID:      stringField(d, "showId"),
+		Provider:    provider,
 		VideoID:     stringField(d, "videoId"),
 		Title:       stringField(d, "title"),
 		Duration:    floatField(d, "duration"),

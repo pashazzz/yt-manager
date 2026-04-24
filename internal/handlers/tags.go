@@ -7,25 +7,25 @@ import (
 
 	"github.com/pavlo/yt-manager/internal/middleware"
 	"github.com/pavlo/yt-manager/internal/models"
+	"github.com/pavlo/yt-manager/internal/providers"
 	"github.com/pavlo/yt-manager/internal/repository"
-	"github.com/pavlo/yt-manager/internal/ytdlp"
 )
 
 // TagHandler держит зависимости для хендлеров тегов.
 type TagHandler struct {
-	tags     *repository.TagRepo
-	shows    *repository.ShowRepo
-	episodes *repository.EpisodeRepo
-	ytClient *ytdlp.Client
+	tags      *repository.TagRepo
+	shows     *repository.ShowRepo
+	episodes  *repository.EpisodeRepo
+	providers *providers.Registry
 }
 
 func NewTagHandler(
 	tags *repository.TagRepo,
 	shows *repository.ShowRepo,
 	episodes *repository.EpisodeRepo,
-	ytClient *ytdlp.Client,
+	registry *providers.Registry,
 ) *TagHandler {
-	return &TagHandler{tags: tags, shows: shows, episodes: episodes, ytClient: ytClient}
+	return &TagHandler{tags: tags, shows: shows, episodes: episodes, providers: registry}
 }
 
 type TagInfo struct {
@@ -268,7 +268,12 @@ func (h *TagHandler) AddSingleVideoToTag(c *gin.Context) {
 		return
 	}
 
-	info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.URL)
+	provider, err := h.providers.Detect(body.URL)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	info, err := provider.Fetch(c.Request.Context(), body.URL)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch video info: " + err.Error()})
 		return
@@ -284,6 +289,7 @@ func (h *TagHandler) AddSingleVideoToTag(c *gin.Context) {
 	for i, entry := range info.Entries {
 		episodes = append(episodes, &models.Episode{
 			ShowID:     singlesShow.ID,
+			Provider:   provider.Name(),
 			VideoID:    entry.ID,
 			Title:      entry.Title,
 			Duration:   entry.Duration,

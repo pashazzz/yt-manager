@@ -10,9 +10,12 @@ export interface Show {
   createdAt: string
 }
 
+export type Provider = 'youtube' | 'rutube' | (string & {})
+
 export interface Episode {
   id: string
   showId: string
+  provider?: Provider
   videoId: string
   title: string
   duration: number

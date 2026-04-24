@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import type { Tag } from '../types'
+import { detectProvider, providerLabel } from '../utils/providers'
 
 interface Props {
   tags?: Tag[]
@@ -29,7 +30,7 @@ export default function AddVideoModal({ tags = [], defaultTagId = '', onCreated,
       <div className="modal">
         <div className="modal-title">Добавить видео</div>
         <div className="modal-subtitle">
-          Вставь ссылку на YouTube видео для добавления.
+          Вставь ссылку на видео.
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -43,6 +44,13 @@ export default function AddVideoModal({ tags = [], defaultTagId = '', onCreated,
             disabled={loading}
             autoFocus
           />
+          {url.trim() && (
+            <div className="modal-hint" style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.75 }}>
+              {detectProvider(url)
+                ? `Источник: ${providerLabel(detectProvider(url))}`
+                : 'Неизвестный источник'}
+            </div>
+          )}
 
           {tags.length > 0 && (
             <div className="modal-field" style={{ marginTop: 16 }}>

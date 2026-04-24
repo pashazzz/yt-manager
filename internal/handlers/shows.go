@@ -7,25 +7,25 @@ import (
 
 	"github.com/pavlo/yt-manager/internal/middleware"
 	"github.com/pavlo/yt-manager/internal/models"
+	"github.com/pavlo/yt-manager/internal/providers"
 	"github.com/pavlo/yt-manager/internal/repository"
-	"github.com/pavlo/yt-manager/internal/ytdlp"
 )
 
 // ShowHandler держит зависимости для хендлеров шоу.
 type ShowHandler struct {
-	shows    *repository.ShowRepo
-	episodes *repository.EpisodeRepo
-	tags     *repository.TagRepo
-	ytClient *ytdlp.Client
+	shows     *repository.ShowRepo
+	episodes  *repository.EpisodeRepo
+	tags      *repository.TagRepo
+	providers *providers.Registry
 }
 
 func NewShowHandler(
 	shows *repository.ShowRepo,
 	episodes *repository.EpisodeRepo,
 	tags *repository.TagRepo,
-	ytClient *ytdlp.Client,
+	registry *providers.Registry,
 ) *ShowHandler {
-	return &ShowHandler{shows: shows, episodes: episodes, tags: tags, ytClient: ytClient}
+	return &ShowHandler{shows: shows, episodes: episodes, tags: tags, providers: registry}
 }
 
 // CreateShow godoc
@@ -76,17 +76,23 @@ func (h *ShowHandler) CreateShow(c *gin.Context) {
 	var episodes []*models.Episode
 
 	if body.PlaylistURL != "" {
-		info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.PlaylistURL)
+		provider, err := h.providers.Detect(body.PlaylistURL)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		info, err := provider.Fetch(c.Request.Context(), body.PlaylistURL)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch playlist: " + err.Error()})
 			return
 		}
 		show.Title = info.Title
 		show.PlaylistURL = body.PlaylistURL
-		
+
 		episodes = make([]*models.Episode, 0, len(info.Entries))
 		for i, entry := range info.Entries {
 			episodes = append(episodes, &models.Episode{
+				Provider:   provider.Name(),
 				VideoID:    entry.ID,
 				Title:      entry.Title,
 				Duration:   entry.Duration,
@@ -276,8 +282,13 @@ func (h *ShowHandler) AddEpisode(c *gin.Context) {
 		return
 	}
 
-	// 2. Получаем видео через yt-dlp
-	info, err := h.ytClient.FetchPlaylist(c.Request.Context(), body.URL)
+	// 2. Получаем видео через нужного провайдера
+	provider, err := h.providers.Detect(body.URL)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	info, err := provider.Fetch(c.Request.Context(), body.URL)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch video info: " + err.Error()})
 		return
@@ -295,6 +306,7 @@ func (h *ShowHandler) AddEpisode(c *gin.Context) {
 	for i, entry := range info.Entries {
 		episodes = append(episodes, &models.Episode{
 			ShowID:     showID,
+			Provider:   provider.Name(),
 			VideoID:    entry.ID,
 			Title:      entry.Title,
 			Duration:   entry.Duration,

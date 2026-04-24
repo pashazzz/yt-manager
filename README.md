@@ -1,6 +1,6 @@
 # yt-manager
 
-Сервис для просмотра YouTube-плейлистов как сериалов с отслеживанием прогресса, мульти-теггингом и синхронизацией через Tailscale.
+Сервис для просмотра плейлистов (YouTube, Rutube) как сериалов с отслеживанием прогресса, мульти-теггингом и синхронизацией через Tailscale.
 
 ## Стек
 
@@ -8,7 +8,7 @@
 |------|-----------|
 | Backend | Go 1.25, Gin v1.12 |
 | БД | CloverDB v2 alpha |
-| YouTube | yt-dlp via go-ytdlp |
+| Источники видео | YouTube, Rutube (через yt-dlp, слой `internal/providers`) |
 | Frontend | React 18 + Vite + TypeScript |
 | Auth | Tailscale (`Tailscale-User-*` заголовки) |
 
@@ -24,6 +24,7 @@ yt-manager/
 │   ├── models/          # Profile, Show, Episode
 │   ├── repository/      # CRUD для каждой модели
 │   ├── ytdlp/           # обёртка над yt-dlp binary
+│   ├── providers/       # слой источников видео (YouTube, Rutube, …) с автодетектом по URL
 │   ├── handlers/        # HTTP-хендлеры (shows, episodes)
 │   ├── middleware/       # Tailscale → Profile
 │   └── web/

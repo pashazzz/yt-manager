@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { api } from '../api/client'
 import type { Show, Tag } from '../types'
+import { detectProvider, providerLabel } from '../utils/providers'
 
 interface Props {
   tags: Tag[]
@@ -48,7 +49,7 @@ export default function AddShowModal({ tags, defaultTagId, onCreated, onClose }:
       <div className="modal">
         <div className="modal-title">Добавить плейлист</div>
         <div className="modal-subtitle">
-          Вставь ссылку на YouTube-плейлист — эпизоды загрузятся автоматически.
+          Вставь ссылку на плейлист — эпизоды загрузятся автоматически.
           На большие плейлисты может уйти до минуты.
         </div>
 
@@ -59,16 +60,25 @@ export default function AddShowModal({ tags, defaultTagId, onCreated, onClose }:
 
         <form onSubmit={handleSubmit}>
           {!isCustom ? (
-            <input
-              ref={inputRef}
-              className="modal-input"
-              type="url"
-              placeholder="https://youtube.com/playlist?list=…"
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              disabled={loading}
-              autoFocus
-            />
+            <>
+              <input
+                ref={inputRef}
+                className="modal-input"
+                type="url"
+                placeholder="https://youtube.com/playlist?list=…"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                disabled={loading}
+                autoFocus
+              />
+              {url.trim() && (
+                <div className="modal-hint" style={{ fontSize: '0.8rem', marginTop: 4, opacity: 0.75 }}>
+                  {detectProvider(url)
+                    ? `Источник: ${providerLabel(detectProvider(url))}`
+                    : 'Неизвестный источник'}
+                </div>
+              )}
+            </>
           ) : (
             <input
               className="modal-input"

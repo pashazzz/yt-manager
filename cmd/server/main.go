@@ -15,6 +15,7 @@ import (
 	"github.com/pavlo/yt-manager/internal/db"
 	"github.com/pavlo/yt-manager/internal/handlers"
 	"github.com/pavlo/yt-manager/internal/middleware"
+	"github.com/pavlo/yt-manager/internal/providers"
 	"github.com/pavlo/yt-manager/internal/repository"
 	web "github.com/pavlo/yt-manager/internal/web"
 	"github.com/pavlo/yt-manager/internal/ytdlp"
@@ -44,6 +45,9 @@ func main() {
 		log.Fatalf("failed to initialise yt-dlp client: %v", err)
 	}
 
+	// --- Провайдеры (YouTube, Rutube, …) ---
+	providerRegistry := providers.NewDefaultRegistry(ytClient)
+
 	// --- Роутер ---
 	r := gin.Default()
 
@@ -61,9 +65,9 @@ func main() {
 	r.Use(middleware.Profile(profileRepo))
 
 	// --- Хендлеры ---
-	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, tagRepo, ytClient)
+	showHandler := handlers.NewShowHandler(showRepo, episodeRepo, tagRepo, providerRegistry)
 	episodeHandler := handlers.NewEpisodeHandler(episodeRepo, showRepo, tagRepo)
-	tagHandler := handlers.NewTagHandler(tagRepo, showRepo, episodeRepo, ytClient)
+	tagHandler := handlers.NewTagHandler(tagRepo, showRepo, episodeRepo, providerRegistry)
 
 	// --- Маршруты ---
 	api := r.Group("/api/v1")
