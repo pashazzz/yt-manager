@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Episode } from '../../types'
-import { usePlayerProgress, isMobile, type PlayerApi } from './usePlayerProgress'
+import { usePlayerProgress, type PlayerApi } from './usePlayerProgress'
 
 interface Props {
   episode: Episode
@@ -23,7 +23,8 @@ export default function RutubePlayer({ episode, onProgressSaved }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const currentTimeRef = useRef<number>(episode.currentTime)
   const durationRef = useRef<number>(episode.duration)
-  const seekedRef = useRef(false)
+  const targetSeekRef = useRef<number>(episode.currentTime)
+  const seekConfirmedRef = useRef<boolean>(episode.currentTime <= 0)
   const playerApiRef = useRef<PlayerApi | null>({
     getCurrentTime: () => currentTimeRef.current,
     getDuration: () => durationRef.current,
@@ -35,6 +36,14 @@ export default function RutubePlayer({ episode, onProgressSaved }: Props) {
     playerApiRef,
   )
 
+  // При смене эпизода сбрасываем цель seek.
+  useEffect(() => {
+    targetSeekRef.current = episode.currentTime
+    seekConfirmedRef.current = episode.currentTime <= 0
+    currentTimeRef.current = episode.currentTime
+    durationRef.current = episode.duration
+  }, [episode.id, episode.currentTime, episode.duration])
+
   const postCommand = (type: string, data: Record<string, unknown> = {}) => {
     const win = iframeRef.current?.contentWindow
     if (!win) return
@@ -42,11 +51,17 @@ export default function RutubePlayer({ episode, onProgressSaved }: Props) {
     win.postMessage(JSON.stringify({ type, data }), '*')
   }
 
+  const trySeek = () => {
+    const target = targetSeekRef.current
+    if (target <= 0 || seekConfirmedRef.current) return
+    postCommand('player:setCurrentTime', { time: Math.floor(target) })
+  }
+
   useEffect(() => {
     const handler = (ev: MessageEvent) => {
-      // Игнорируем сообщения не от Rutube iframe
-      if (!iframeRef.current || ev.source !== iframeRef.current.contentWindow) return
-
+      // Не проверяем ev.source: при cross-origin iframe сравнение с contentWindow
+      // иногда не срабатывает. Фильтруем только по префиксу type === 'player:*',
+      // чего достаточно, т.к. формат сообщений специфичен для Rutube.
       let msg: RutubeMessage | null = null
       try {
         msg = typeof ev.data === 'string' ? JSON.parse(ev.data) : (ev.data as RutubeMessage)
@@ -57,53 +72,46 @@ export default function RutubePlayer({ episode, onProgressSaved }: Props) {
 
       const { type, data = {} } = msg
 
-      if (typeof data.time === 'number') currentTimeRef.current = data.time
+      // player:currentTime приходит периодически во время проигрывания —
+      // обновляем ref, чтобы heartbeat/saveNow могли синхронно его прочитать.
+      if (typeof data.time === 'number') {
+        currentTimeRef.current = data.time
+        // Если мы всё ещё в районе 0, а должны быть на target — повторяем seek.
+        const target = targetSeekRef.current
+        if (!seekConfirmedRef.current && target > 1) {
+          if (data.time >= target - 2) {
+            // Плеер наконец-то оказался у цели — seek отработал.
+            seekConfirmedRef.current = true
+          } else if (data.time < 2) {
+            // Плеер играет с начала, хотя мы просили target — повторяем seek.
+            trySeek()
+          }
+        }
+      }
       if (typeof data.duration === 'number' && data.duration > 0) durationRef.current = data.duration
 
       switch (type) {
         case 'player:ready':
-        case 'player:init': {
-          // Rutube сообщает длительность в отдельном событии; пытаемся перемотать
-          // как только она появится.
-          if (!seekedRef.current && episode.currentTime > 0) {
-            postCommand('player:setCurrentTime', { time: Math.floor(episode.currentTime) })
-            seekedRef.current = true
-          }
-          if (!isMobile) startHeartbeat()
-          break
-        }
         case 'player:durationChange': {
-          if (!seekedRef.current && episode.currentTime > 0) {
-            postCommand('player:setCurrentTime', { time: Math.floor(episode.currentTime) })
-            seekedRef.current = true
-          }
-          break
-        }
-        case 'player:playing':
-        case 'player:play': {
-          startHeartbeat()
-          break
-        }
-        case 'player:paused':
-        case 'player:pause': {
-          stopHeartbeat()
-          void saveNow()
-          break
-        }
-        case 'player:stopped':
-        case 'player:ended': {
-          void handleEnd()
+          // Плеер готов — пробуем восстановить позицию.
+          trySeek()
           break
         }
         case 'player:changeState': {
           const state = data.state
-          if (state === 'playing') startHeartbeat()
-          else if (state === 'paused') {
+          if (state === 'playing') {
+            startHeartbeat()
+            // На всякий случай ретраим seek — при первом play плеер уже готов к нему.
+            trySeek()
+          } else if (state === 'paused' || state === 'stopped') {
             stopHeartbeat()
             void saveNow()
-          } else if (state === 'stopped' || state === 'ended') {
-            void handleEnd()
           }
+          break
+        }
+        case 'player:playComplete': {
+          // Настоящее окончание видео — помечаем как просмотренное.
+          void handleEnd()
           break
         }
       }
@@ -111,7 +119,7 @@ export default function RutubePlayer({ episode, onProgressSaved }: Props) {
 
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [episode.currentTime, startHeartbeat, stopHeartbeat, saveNow, handleEnd])
+  }, [startHeartbeat, stopHeartbeat, saveNow, handleEnd])
 
   const src = `https://rutube.ru/play/embed/${encodeURIComponent(episode.videoId)}`
 
