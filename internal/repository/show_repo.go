@@ -22,10 +22,20 @@ func NewShowRepo(database *clover.DB) *ShowRepo {
 	return &ShowRepo{db: database}
 }
 
-// Create сохраняет новое шоу с заполненным ID.
+// Create сохраняет новое шоу с заполненным ID. Если OrderIndex не задан явно,
+// ставим max(orderIndex)+1 среди шоу владельца — так новое шоу всегда оказывается
+// в конце списка, в том числе после ручных drag-and-drop переупорядочиваний.
 func (r *ShowRepo) Create(s *models.Show) error {
 	s.ID = uuid.NewString()
 	s.CreatedAt = time.Now().UTC()
+
+	if s.OrderIndex == 0 {
+		maxIdx, err := r.getMaxOrderIndex(s.OwnerID)
+		if err != nil {
+			return err
+		}
+		s.OrderIndex = maxIdx + 1
+	}
 
 	doc := document.NewDocumentOf(map[string]any{
 		"_id":         s.ID,
@@ -39,6 +49,25 @@ func (r *ShowRepo) Create(s *models.Show) error {
 		"createdAt":    s.CreatedAt,
 	})
 	return r.db.Insert(db.CollectionShows, doc)
+}
+
+// getMaxOrderIndex возвращает максимальный orderIndex среди шоу владельца.
+// Если шоу ещё нет, возвращает 0.
+func (r *ShowRepo) getMaxOrderIndex(ownerID string) (int, error) {
+	q := query.NewQuery(db.CollectionShows).
+		Where(query.Field("ownerId").Eq(ownerID)).
+		Sort(query.SortOption{Field: "orderIndex", Direction: -1})
+	doc, err := r.db.FindFirst(q)
+	if err != nil {
+		if errors.Is(err, clover.ErrDocumentNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if doc == nil {
+		return 0, nil
+	}
+	return showIntField(doc, "orderIndex"), nil
 }
 
 // FindByOwner возвращает все шоу профиля (для обратной совместимости).

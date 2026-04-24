@@ -93,7 +93,7 @@ export default function ShowsPage() {
     const detail = await api.getShow(show.id).catch(() => ({ show, episodes: [] }))
     // Показываем шоу только если оно содержит текущий тег
     if ((show.tagIds || []).includes(tagId!)) {
-      setItems(prev => [{ show: detail.show, episodes: detail.episodes }, ...prev])
+      setItems(prev => [...prev, { show: detail.show, episodes: detail.episodes }])
     }
   }
 
