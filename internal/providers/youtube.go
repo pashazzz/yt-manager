@@ -37,3 +37,8 @@ func (y *YouTube) Fetch(ctx context.Context, url string) (*PlaylistInfo, error) 
 	}
 	return &PlaylistInfo{Title: info.Title, Entries: info.Entries}, nil
 }
+
+// VideoURL строит URL одиночного видео.
+func (y *YouTube) VideoURL(videoID string) string {
+	return "https://www.youtube.com/watch?v=" + videoID
+}

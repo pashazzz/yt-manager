@@ -226,16 +226,17 @@ func episodeToDoc(ep *models.Episode) *document.Document {
 		provider = "youtube"
 	}
 	return document.NewDocumentOf(map[string]any{
-		"_id":         ep.ID,
-		"showId":      ep.ShowID,
-		"provider":    provider,
-		"videoId":     ep.VideoID,
-		"title":       ep.Title,
-		"duration":    ep.Duration,
-		"currentTime": ep.CurrentTime,
-		"isWatched":   ep.IsWatched,
-		"orderIndex":  ep.OrderIndex,
-		"tagIds":      ep.TagIDs,
+		"_id":          ep.ID,
+		"showId":       ep.ShowID,
+		"provider":     provider,
+		"videoId":      ep.VideoID,
+		"title":        ep.Title,
+		"duration":     ep.Duration,
+		"currentTime":  ep.CurrentTime,
+		"isWatched":    ep.IsWatched,
+		"orderIndex":   ep.OrderIndex,
+		"tagIds":       ep.TagIDs,
+		"thumbnailUrl": ep.ThumbnailURL,
 	})
 }
 
@@ -256,22 +257,46 @@ func docToEpisode(d *document.Document) *models.Episode {
 	}
 
 	return &models.Episode{
-		ID:          d.ObjectId(),
-		ShowID:      stringField(d, "showId"),
-		Provider:    provider,
-		VideoID:     stringField(d, "videoId"),
-		Title:       stringField(d, "title"),
-		Duration:    floatField(d, "duration"),
-		CurrentTime: floatField(d, "currentTime"),
-		IsWatched:   boolField(d, "isWatched"),
-		OrderIndex:  intField(d, "orderIndex"),
-		TagIDs:      tagIDs,
+		ID:           d.ObjectId(),
+		ShowID:       stringField(d, "showId"),
+		Provider:     provider,
+		VideoID:      stringField(d, "videoId"),
+		Title:        stringField(d, "title"),
+		Duration:     floatField(d, "duration"),
+		CurrentTime:  floatField(d, "currentTime"),
+		IsWatched:    boolField(d, "isWatched"),
+		OrderIndex:   intField(d, "orderIndex"),
+		TagIDs:       tagIDs,
+		ThumbnailURL: stringField(d, "thumbnailUrl"),
 	}
 }
 
 func (r *EpisodeRepo) UpdateTags(id string, tagIDs []string) error {
 	q := query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id))
 	return r.db.Update(q, map[string]any{"tagIds": tagIDs})
+}
+
+// UpdateThumbnail обновляет URL превью для эпизода. Используется бэкфилом.
+func (r *EpisodeRepo) UpdateThumbnail(id, thumbnailURL string) error {
+	q := query.NewQuery(db.CollectionEpisodes).Where(query.Field("_id").Eq(id))
+	return r.db.Update(q, map[string]any{"thumbnailUrl": thumbnailURL})
+}
+
+// FindMissingThumbnails возвращает все эпизоды, у которых не заполнен thumbnailUrl.
+// Используется на старте сервера для ленивой миграции.
+func (r *EpisodeRepo) FindMissingThumbnails() ([]*models.Episode, error) {
+	docs, err := r.db.FindAll(query.NewQuery(db.CollectionEpisodes))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*models.Episode, 0)
+	for _, d := range docs {
+		ep := docToEpisode(d)
+		if ep.ThumbnailURL == "" {
+			out = append(out, ep)
+		}
+	}
+	return out, nil
 }
 
 func stringSliceField(d *document.Document, key string) []string {

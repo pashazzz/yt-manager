@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { TagInfo } from '../types'
+import { thumbForVideo } from '../utils/thumbnails'
 
 // Набор градиентов для карточек — назначается по индексу
 const GRADIENTS = [
@@ -34,7 +35,11 @@ export default function TagCard({ tag, index, onDelete, onToggleThumb }: Props) 
     onToggleThumb(tag.id, !tag.useThumb)
   }
 
-  const thumbUrl = tag.firstVideoId ? `https://img.youtube.com/vi/${tag.firstVideoId}/mqdefault.jpg` : null
+  const thumbUrl = thumbForVideo({
+    provider: tag.firstProvider,
+    videoId: tag.firstVideoId,
+    thumbnailUrl: tag.firstThumbnailUrl,
+  }) || null
   const showThumb = tag.useThumb && thumbUrl
 
   const style: React.CSSProperties = {

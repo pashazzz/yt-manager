@@ -30,9 +30,11 @@ func NewTagHandler(
 
 type TagInfo struct {
 	models.Tag
-	ShowCount    int    `json:"showCount"`
-	EpisodeCount int    `json:"episodeCount"`
-	FirstVideoID string `json:"firstVideoId"`
+	ShowCount         int    `json:"showCount"`
+	EpisodeCount      int    `json:"episodeCount"`
+	FirstVideoID      string `json:"firstVideoId"`
+	FirstProvider     string `json:"firstProvider"`
+	FirstThumbnailURL string `json:"firstThumbnailUrl"`
 }
 
 // ListTags godoc
@@ -60,21 +62,29 @@ func (h *TagHandler) ListTags(c *gin.Context) {
 		singlesEpisodes, _ := h.episodes.FindSinglesByTag(profile.ID, t.ID, t.IsDefault)
 		
 		firstVideoID := ""
+		firstProvider := ""
+		firstThumbnailURL := ""
 		if len(shows) > 0 {
 			// Берем первый эпизод первого шоу
 			eps, _ := h.episodes.FindByShow(shows[0].ID)
 			if len(eps) > 0 {
 				firstVideoID = eps[0].VideoID
+				firstProvider = eps[0].Provider
+				firstThumbnailURL = eps[0].ThumbnailURL
 			}
 		} else if len(singlesEpisodes) > 0 {
 			firstVideoID = singlesEpisodes[0].VideoID
+			firstProvider = singlesEpisodes[0].Provider
+			firstThumbnailURL = singlesEpisodes[0].ThumbnailURL
 		}
 
 		result = append(result, TagInfo{
-			Tag:          *t,
-			ShowCount:    len(shows),
-			EpisodeCount: len(singlesEpisodes),
-			FirstVideoID: firstVideoID,
+			Tag:               *t,
+			ShowCount:         len(shows),
+			EpisodeCount:      len(singlesEpisodes),
+			FirstVideoID:      firstVideoID,
+			FirstProvider:     firstProvider,
+			FirstThumbnailURL: firstThumbnailURL,
 		})
 	}
 
@@ -288,13 +298,14 @@ func (h *TagHandler) AddSingleVideoToTag(c *gin.Context) {
 	episodes := make([]*models.Episode, 0, len(info.Entries))
 	for i, entry := range info.Entries {
 		episodes = append(episodes, &models.Episode{
-			ShowID:     singlesShow.ID,
-			Provider:   provider.Name(),
-			VideoID:    entry.ID,
-			Title:      entry.Title,
-			Duration:   entry.Duration,
-			OrderIndex: maxOrderIndex + 1 + i,
-			TagIDs:     body.TagIDs,
+			ShowID:       singlesShow.ID,
+			Provider:     provider.Name(),
+			VideoID:      entry.ID,
+			Title:        entry.Title,
+			Duration:     entry.Duration,
+			OrderIndex:   maxOrderIndex + 1 + i,
+			TagIDs:       body.TagIDs,
+			ThumbnailURL: entry.BestThumbnail(),
 		})
 	}
 

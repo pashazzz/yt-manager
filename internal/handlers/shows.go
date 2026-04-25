@@ -92,11 +92,12 @@ func (h *ShowHandler) CreateShow(c *gin.Context) {
 		episodes = make([]*models.Episode, 0, len(info.Entries))
 		for i, entry := range info.Entries {
 			episodes = append(episodes, &models.Episode{
-				Provider:   provider.Name(),
-				VideoID:    entry.ID,
-				Title:      entry.Title,
-				Duration:   entry.Duration,
-				OrderIndex: i,
+				Provider:     provider.Name(),
+				VideoID:      entry.ID,
+				Title:        entry.Title,
+				Duration:     entry.Duration,
+				OrderIndex:   i,
+				ThumbnailURL: entry.BestThumbnail(),
 			})
 		}
 	} else {
@@ -305,12 +306,13 @@ func (h *ShowHandler) AddEpisode(c *gin.Context) {
 	episodes := make([]*models.Episode, 0, len(info.Entries))
 	for i, entry := range info.Entries {
 		episodes = append(episodes, &models.Episode{
-			ShowID:     showID,
-			Provider:   provider.Name(),
-			VideoID:    entry.ID,
-			Title:      entry.Title,
-			Duration:   entry.Duration,
-			OrderIndex: maxOrderIndex + 1 + i,
+			ShowID:       showID,
+			Provider:     provider.Name(),
+			VideoID:      entry.ID,
+			Title:        entry.Title,
+			Duration:     entry.Duration,
+			OrderIndex:   maxOrderIndex + 1 + i,
+			ThumbnailURL: entry.BestThumbnail(),
 		})
 	}
 

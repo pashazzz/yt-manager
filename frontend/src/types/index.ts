@@ -23,6 +23,7 @@ export interface Episode {
   isWatched: boolean
   orderIndex: number
   tagIds?: string[]
+  thumbnailUrl?: string
 }
 
 export interface Tag {
@@ -39,6 +40,8 @@ export interface TagInfo extends Tag {
   showCount: number
   episodeCount: number
   firstVideoId: string
+  firstProvider?: Provider
+  firstThumbnailUrl?: string
 }
 
 export interface ShowDetail {

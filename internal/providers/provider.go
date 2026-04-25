@@ -24,6 +24,9 @@ type Provider interface {
 	Matches(url string) bool
 	// Fetch получает метаданные плейлиста или одиночного видео.
 	Fetch(ctx context.Context, url string) (*PlaylistInfo, error)
+	// VideoURL строит каноничный URL одиночного видео по его videoId.
+	// Используется бэкфилом превью для старых эпизодов (когда мы не сохраняли URL).
+	VideoURL(videoID string) string
 }
 
 // Registry — упорядоченный список провайдеров для автодетекта по URL.
@@ -44,6 +47,17 @@ func NewDefaultRegistry(yt *ytdlp.Client) *Registry {
 
 // Register добавляет провайдера в реестр.
 func (r *Registry) Register(p Provider) { r.providers = append(r.providers, p) }
+
+// ByName ищет зарегистрированного провайдера по каноническому имени.
+// Возвращает nil, если такого нет (например, эпизоды с устаревшим именем).
+func (r *Registry) ByName(name string) Provider {
+	for _, p := range r.providers {
+		if p.Name() == name {
+			return p
+		}
+	}
+	return nil
+}
 
 // Detect возвращает провайдера, который поддерживает данный URL.
 // Ошибка возвращается, если ни один провайдер не распознал URL.

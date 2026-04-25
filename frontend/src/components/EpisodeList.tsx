@@ -3,6 +3,7 @@ import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities'
 
 import type { Episode, Tag } from '../types'
+import { thumbForEpisode } from '../utils/thumbnails'
 
 interface Props {
   episodes: Episode[]
@@ -27,12 +28,9 @@ function fmtDuration(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function thumbUrl(videoId: string) {
-  return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
-}
-
 function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, tags, onMove, onDelete }: any) {
   const progress = ep.duration > 0 ? Math.min(100, (ep.currentTime / ep.duration) * 100) : 0
+  const thumb = thumbForEpisode(ep)
 
   return (
     <div
@@ -48,7 +46,7 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
         </div>
       )}
       <div className="episode-thumb">
-        <img src={thumbUrl(ep.videoId)} alt={ep.title} loading="lazy" />
+        {thumb && <img src={thumb} alt={ep.title} loading="lazy" />}
         {ep.isWatched ? (
           <div className="episode-thumb-watched">✓</div>
         ) : progress > 0 ? (

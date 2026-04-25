@@ -48,6 +48,10 @@ func main() {
 	// --- Провайдеры (YouTube, Rutube, …) ---
 	providerRegistry := providers.NewDefaultRegistry(ytClient)
 
+	// Фоновая миграция: подтягиваем превью для эпизодов, добавленных
+	// до появления поля thumbnailUrl (важно для не-YouTube провайдеров).
+	go handlers.BackfillThumbnails(episodeRepo, providerRegistry)
+
 	// --- Роутер ---
 	r := gin.Default()
 

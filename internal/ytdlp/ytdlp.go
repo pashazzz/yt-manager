@@ -11,10 +11,33 @@ import (
 
 // PlaylistEntry — одно видео из плейлиста, как его возвращает yt-dlp.
 type PlaylistEntry struct {
-	ID       string  `json:"id"`
-	Title    string  `json:"title"`
-	Duration float64 `json:"duration"`
-	URL      string  `json:"url"`
+	ID         string      `json:"id"`
+	Title      string      `json:"title"`
+	Duration   float64     `json:"duration"`
+	URL        string      `json:"url"`
+	Thumbnail  string      `json:"thumbnail"`
+	Thumbnails []Thumbnail `json:"thumbnails"`
+}
+
+// Thumbnail — один из вариантов превью видео.
+type Thumbnail struct {
+	URL        string  `json:"url"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Preference float64 `json:"preference"`
+}
+
+// BestThumbnail возвращает URL наиболее подходящей превьюшки записи:
+// сначала пробует поле thumbnail, затем берёт последнюю из thumbnails
+// (yt-dlp сортирует от худшего к лучшему).
+func (e *PlaylistEntry) BestThumbnail() string {
+	if e.Thumbnail != "" {
+		return e.Thumbnail
+	}
+	if n := len(e.Thumbnails); n > 0 {
+		return e.Thumbnails[n-1].URL
+	}
+	return ""
 }
 
 // PlaylistInfo — результат парсинга --dump-single-json для плейлиста.
@@ -22,8 +45,10 @@ type PlaylistInfo struct {
 	Title   string          `json:"title"`
 	Entries []PlaylistEntry `json:"entries"`
 	// Поля для парсинга одиночного видео
-	ID       string  `json:"id"`
-	Duration float64 `json:"duration"`
+	ID         string      `json:"id"`
+	Duration   float64     `json:"duration"`
+	Thumbnail  string      `json:"thumbnail"`
+	Thumbnails []Thumbnail `json:"thumbnails"`
 }
 
 // Client — обёртка над yt-dlp, которая отвечает за получение метаданных.
@@ -72,10 +97,12 @@ func (c *Client) FetchPlaylist(ctx context.Context, url string) (*PlaylistInfo, 
 	// Если yt-dlp вернул данные по одиночному видео (entries пустой, но есть ID).
 	if len(info.Entries) == 0 && info.ID != "" {
 		info.Entries = []PlaylistEntry{{
-			ID:       info.ID,
-			Title:    info.Title,
-			Duration: info.Duration,
-			URL:      url,
+			ID:         info.ID,
+			Title:      info.Title,
+			Duration:   info.Duration,
+			URL:        url,
+			Thumbnail:  info.Thumbnail,
+			Thumbnails: info.Thumbnails,
 		}}
 	}
 

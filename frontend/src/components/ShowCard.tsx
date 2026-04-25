@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { Show, Episode, Tag } from '../types'
+import { thumbForEpisode } from '../utils/thumbnails'
 
 interface Props {
   show: Show
@@ -12,15 +13,12 @@ interface Props {
   style?: React.CSSProperties
 }
 
-function thumbUrl(videoId: string | undefined) {
-  return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : ''
-}
-
 export default function ShowCard({ show, episodes, tags, onDelete, onMove, listeners, setNodeRef, style }: Props) {
   const navigate = useNavigate()
   const firstEp = episodes[0]
   const watched = episodes.filter(e => e.isWatched).length
   const progress = episodes.length > 0 ? (watched / episodes.length) * 100 : 0
+  const thumb = firstEp ? thumbForEpisode(firstEp) : ''
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -63,7 +61,7 @@ export default function ShowCard({ show, episodes, tags, onDelete, onMove, liste
             ☰
           </div>
         )}
-        {firstEp && <img src={thumbUrl(firstEp.videoId)} alt={show.title} loading="lazy" />}
+        {firstEp && thumb && <img src={thumb} alt={show.title} loading="lazy" />}
         <div className="show-card-overlay">
           <span className="btn-play-overlay">▶ Смотреть</span>
         </div>
