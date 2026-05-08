@@ -1,8 +1,13 @@
+//go:build ignore
+// +build ignore
+
+// Diagnostic helper: запустить через `go run scratch/fetch_playlist.go`.
 package main
 
 import (
 	"context"
 	"fmt"
+
 	"github.com/pavlo/yt-manager/internal/ytdlp"
 )
 

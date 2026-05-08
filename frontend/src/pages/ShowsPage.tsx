@@ -1,23 +1,27 @@
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { api } from '../api/client'
-import type { Show, Episode, Tag } from '../types'
+import type { Show, Episode, Tag, ShowWithEpisodes } from '../types'
 import ShowCard from '../components/ShowCard'
 import EpisodeList from '../components/EpisodeList'
 import AddShowModal from '../components/AddShowModal'
 import AddVideoModal from '../components/AddVideoModal'
 
-interface ShowWithEpisodes {
+interface SortableShowCardProps {
   show: Show
   episodes: Episode[]
+  tags: Tag[]
+  onDelete: (id: string) => void
+  onMove: (showId: string, tagIds: string[]) => void
 }
 
-function SortableShowCard(props: any) {
+function SortableShowCard(props: SortableShowCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.show.id })
-  const style = {
+  const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.8 : 1,
@@ -74,14 +78,8 @@ export default function ShowsPage() {
       setSinglesShow(tagData.singlesShow ?? null)
       setSinglesEpisodes(tagData.singlesEpisodes ?? [])
 
-      // Загружаем эпизоды для каждого шоу (для прогресса на карточках)
-      const withEpisodes = await Promise.all(
-        tagData.shows.map(async (show: Show) => {
-          const detail = await api.getShow(show.id).catch(() => ({ show, episodes: [] }))
-          return { show: detail.show, episodes: detail.episodes }
-        }),
-      )
-      setItems(withEpisodes)
+      // Эпизоды теперь приходят сразу с шоу — никаких N+1.
+      setItems(tagData.shows)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
     } finally {

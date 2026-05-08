@@ -3,18 +3,26 @@ import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@d
 import { CSS } from '@dnd-kit/utilities'
 
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { api } from '../api/client'
 import type { TagInfo } from '../types'
 import TagCard from '../components/TagCard'
 
-function SortableTag({ tag, index, onDelete, onToggleThumb }: any) {
+interface SortableTagProps {
+  tag: TagInfo
+  index: number
+  onDelete: (id: string) => void
+  onToggleThumb: (id: string, useThumb: boolean) => void
+}
+
+function SortableTag({ tag, index, onDelete, onToggleThumb }: SortableTagProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tag.id })
-  const style = {
+  const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.8 : 1,
     zIndex: isDragging ? 10 : 1,
-    cursor: isDragging ? 'grabbing' : 'grab'
+    cursor: isDragging ? 'grabbing' : 'grab',
   }
 
   return (

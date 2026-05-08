@@ -214,6 +214,21 @@ func (h *TagHandler) ListItemsByTag(c *gin.Context) {
 		return
 	}
 
+	// Для каждого шоу подгружаем эпизоды, чтобы фронт не делал N запросов.
+	type showWithEpisodes struct {
+		Show     *models.Show      `json:"show"`
+		Episodes []*models.Episode `json:"episodes"`
+	}
+	showsPayload := make([]showWithEpisodes, 0, len(shows))
+	for _, s := range shows {
+		eps, err := h.episodes.FindByShow(s.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		showsPayload = append(showsPayload, showWithEpisodes{Show: s, Episodes: eps})
+	}
+
 	// Загружаем скрытое шоу для одиночных видео этого тега
 	singlesShow, err := h.shows.EnsureSinglesShow(profile.ID, tagID)
 	if err != nil {
@@ -230,7 +245,7 @@ func (h *TagHandler) ListItemsByTag(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"tag":             tag,
-		"shows":           shows,
+		"shows":           showsPayload,
 		"singlesShow":     singlesShow,
 		"singlesEpisodes": singlesEpisodes,
 	})

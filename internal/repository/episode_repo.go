@@ -83,11 +83,10 @@ func (r *EpisodeRepo) FindByShow(showID string) ([]*models.Episode, error) {
 	return episodes, nil
 }
 
-// FindSinglesByTag возвращает все одиночные видео (эпизоды из скрытых шоу),
-// которые отмечены данным тегом. Сначала находит все служебные шоу пользователя,
-// затем выбирает из них эпизоды с нужным тегом.
+// FindSinglesByTag возвращает все одиночные видео (эпизоды из служебных шоу),
+// которые отмечены данным тегом. Для Default-тега также возвращает синглы без тегов.
 func (r *EpisodeRepo) FindSinglesByTag(ownerID, tagID string, isDefault bool) ([]*models.Episode, error) {
-	// 1. Получаем все служебные шоу владельца
+	// 1. Получаем _id всех служебных шоу владельца.
 	qShows := query.NewQuery(db.CollectionShows).
 		Where(query.Field("ownerId").Eq(ownerID).And(query.Field("isSingles").Eq(true)))
 	showsDocs, err := r.db.FindAll(qShows)
@@ -103,9 +102,11 @@ func (r *EpisodeRepo) FindSinglesByTag(ownerID, tagID string, isDefault bool) ([
 		showIDs = append(showIDs, d.ObjectId())
 	}
 
-	// 2. Ищем ВСЕ эпизоды в этих шоу (без фильтрации по тегам на уровне БД, чтобы сработала миграция в docToEpisode)
+	// 2. Эпизоды этих шоу, отмеченные нужным тегом — фильтрация на уровне БД.
+	cond := query.Field("showId").In(showIDs...).
+		And(query.Field("tagIds").Contains(tagID))
 	qEps := query.NewQuery(db.CollectionEpisodes).
-		Where(query.Field("showId").In(showIDs...)).
+		Where(cond).
 		Sort(query.SortOption{Field: "orderIndex", Direction: 1})
 	docs, err := r.db.FindAll(qEps)
 	if err != nil {
@@ -113,24 +114,30 @@ func (r *EpisodeRepo) FindSinglesByTag(ownerID, tagID string, isDefault bool) ([
 	}
 
 	episodes := make([]*models.Episode, 0, len(docs))
+	seen := make(map[string]struct{}, len(docs))
 	for _, d := range docs {
 		ep := docToEpisode(d)
-		
-		isMatch := false
-		// Проверяем, есть ли нужный тег в (уже смигрированном) списке
-		for _, tid := range ep.TagIDs {
-			if tid == tagID {
-				isMatch = true
-				break
-			}
-		}
-		
-		// Если это дефолтный тег — показываем также те, у которых нет тегов
-		if !isMatch && isDefault && len(ep.TagIDs) == 0 {
-			isMatch = true
-		}
+		episodes = append(episodes, ep)
+		seen[ep.ID] = struct{}{}
+	}
 
-		if isMatch {
+	// 3. Для Default-тега добавляем синглы вообще без тегов (legacy).
+	if !isDefault {
+		return episodes, nil
+	}
+	qAll := query.NewQuery(db.CollectionEpisodes).
+		Where(query.Field("showId").In(showIDs...)).
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1})
+	allDocs, err := r.db.FindAll(qAll)
+	if err != nil {
+		return episodes, nil
+	}
+	for _, d := range allDocs {
+		ep := docToEpisode(d)
+		if _, ok := seen[ep.ID]; ok {
+			continue
+		}
+		if len(ep.TagIDs) == 0 {
 			episodes = append(episodes, ep)
 		}
 	}
@@ -243,13 +250,6 @@ func episodeToDoc(ep *models.Episode) *document.Document {
 func docToEpisode(d *document.Document) *models.Episode {
 	tagIDs := stringSliceField(d, "tagIds")
 
-	// Миграция: если нет tagIds, но есть sectionId, используем его как единственный тег
-	if len(tagIDs) == 0 && d.Has("sectionId") {
-		if sid, ok := d.Get("sectionId").(string); ok && sid != "" {
-			tagIDs = []string{sid}
-		}
-	}
-
 	// Обратная совместимость: старые записи без provider считаем YouTube.
 	provider := stringField(d, "provider")
 	if provider == "" {
@@ -338,6 +338,8 @@ func intField(d *document.Document, key string) int {
 	case int:
 		return v
 	case float64:
+		return int(v)
+	case float32:
 		return int(v)
 	}
 	return 0

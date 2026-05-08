@@ -1,9 +1,11 @@
+import type { CSSProperties } from 'react'
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
 import type { Episode, Tag } from '../types'
 import { thumbForEpisode } from '../utils/thumbnails'
+import { fmtDuration } from '../utils/format'
 
 interface Props {
   episodes: Episode[]
@@ -19,16 +21,22 @@ interface Props {
   onDelete?: (episodeId: string) => void
 }
 
-function fmtDuration(sec: number): string {
-  if (!sec) return ''
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  const s = Math.floor(sec % 60)
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  return `${m}:${String(s).padStart(2, '0')}`
+interface EpisodeItemProps {
+  ep: Episode
+  index: number
+  isActive: boolean
+  onSelect: (ep: Episode) => void
+  onToggleWatched?: (ep: Episode) => void
+  isReorderable?: boolean
+  listeners?: Record<string, unknown>
+  setNodeRef?: (node: HTMLElement | null) => void
+  style?: CSSProperties
+  tags?: Tag[]
+  onMove?: (episodeId: string, tagIds: string[]) => void
+  onDelete?: (episodeId: string) => void
 }
 
-function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, tags, onMove, onDelete }: any) {
+function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorderable, listeners, setNodeRef, style, tags, onMove, onDelete }: EpisodeItemProps) {
   const progress = ep.duration > 0 ? Math.min(100, (ep.currentTime / ep.duration) * 100) : 0
   const thumb = thumbForEpisode(ep)
 
@@ -41,7 +49,7 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
       title={ep.title}
     >
       {isReorderable && (
-        <div className="episode-drag-handle" {...listeners} style={{ padding: '0 8px', cursor: 'grab', opacity: 0.5 }}>
+        <div className="episode-drag-handle" {...listeners}>
           ☰
         </div>
       )}
@@ -67,12 +75,11 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="episode-item-actions">
         {tags && tags.length > 0 && onMove && (
-          <div style={{ position: 'relative', display: 'flex' }}>
+          <div className="tag-picker">
             <button
-              className="btn-ghost"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6, padding: '0 4px', color: 'var(--text)' }}
+              className="btn-icon-ghost"
               title="Управление тегами"
             >
               #
@@ -92,12 +99,12 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
                   : [...currentIds, targetTagId]
 
                 onMove(ep.id, newIds)
-                e.target.value = ""
+                e.target.value = ''
               }}
               onClick={e => e.stopPropagation()}
             >
               <option value="" disabled>Теги...</option>
-              {tags.map((t: any) => {
+              {tags.map((t: Tag) => {
                 const isAssigned = (ep.tagIds || []).includes(t.id)
                 return (
                   <option key={t.id} value={t.id}>
@@ -113,7 +120,7 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
           <div className="episode-action-btn" onClick={e => { e.stopPropagation(); onToggleWatched(ep) }}>
             <button
               title={ep.isWatched ? 'Отметить как непросмотренное' : 'Отметить как просмотренное'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }}
+              className="btn-icon-ghost"
             >
               {ep.isWatched ? '↻' : '✓'}
             </button>
@@ -124,7 +131,7 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
           <div className="episode-action-btn" onClick={e => { e.stopPropagation(); onDelete(ep.id) }}>
             <button
               title="Удалить эпизод"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6, color: '#f44336' }}
+              className="btn-icon-ghost btn-icon-danger"
             >
               ✕
             </button>
@@ -135,9 +142,20 @@ function EpisodeItem({ ep, index, isActive, onSelect, onToggleWatched, isReorder
   )
 }
 
-function SortableEpisode({ ep, index, isActive, onSelect, onToggleWatched, tags, onMove, onDelete }: any) {
+interface SortableEpisodeProps {
+  ep: Episode
+  index: number
+  isActive: boolean
+  onSelect: (ep: Episode) => void
+  onToggleWatched?: (ep: Episode) => void
+  tags?: Tag[]
+  onMove?: (episodeId: string, tagIds: string[]) => void
+  onDelete?: (episodeId: string) => void
+}
+
+function SortableEpisode({ ep, index, isActive, onSelect, onToggleWatched, tags, onMove, onDelete }: SortableEpisodeProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ep.id })
-  const style = {
+  const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.8 : 1,
@@ -180,7 +198,6 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
       const oldIndex = episodes.findIndex(i => i.id === active.id)
       const newIndex = episodes.findIndex(i => i.id === over.id)
       const newItems = arrayMove(episodes, oldIndex, newIndex)
-      // Update orderIndex visually to avoid flashing before server sync
       const updatedItems = newItems.map((item, index) => ({ ...item, orderIndex: index }))
       onReorder(updatedItems)
     }
@@ -235,8 +252,8 @@ export default function EpisodeList({ episodes, currentId, onSelect, onToggleWat
         )}
 
         {onAddVideo && (
-          <div className="episode-list-add" style={{ padding: '10px' }}>
-            <button className="btn-ghost" style={{ width: '100%', fontSize: '0.85rem' }} onClick={onAddVideo}>
+          <div className="episode-list-add">
+            <button className="btn-ghost btn-add-video" onClick={onAddVideo}>
               + Добавить видео
             </button>
           </div>

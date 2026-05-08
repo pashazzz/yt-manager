@@ -114,6 +114,9 @@ func (h *ShowHandler) CreateShow(c *gin.Context) {
 			ep.ShowID = show.ID
 		}
 		if err := h.episodes.BulkCreate(episodes); err != nil {
+			// Best-effort rollback: удаляем только что созданное шоу,
+			// чтобы не оставлять «битое» шоу без эпизодов.
+			_ = h.shows.Delete(show.ID)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

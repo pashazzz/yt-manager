@@ -1,3 +1,7 @@
+//go:build ignore
+// +build ignore
+
+// Diagnostic helper: запустить через `go run scratch/inspect_db.go`.
 package main
 
 import (

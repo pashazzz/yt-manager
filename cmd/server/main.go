@@ -32,6 +32,11 @@ func main() {
 	}
 	defer database.Close()
 
+	// --- Миграции данных ---
+	if err := repository.MigrateSectionIDs(database); err != nil {
+		log.Fatalf("data migration failed: %v", err)
+	}
+
 	// --- Репозитории ---
 	profileRepo := repository.NewProfileRepo(database)
 	tagRepo := repository.NewTagRepo(database)
@@ -55,16 +60,19 @@ func main() {
 	// --- Роутер ---
 	r := gin.Default()
 
-	// CORS для dev-окружения (Vite на :5173)
-	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Tailscale-User-Login, Tailscale-User-Name")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
+	// CORS включаем только в dev-режиме (Vite-прокси на :5173).
+	// В release-режиме фронт отдаётся из того же origin, CORS не нужен.
+	if gin.Mode() != gin.ReleaseMode {
+		r.Use(func(c *gin.Context) {
+			c.Header("Access-Control-Allow-Origin", "*")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Tailscale-User-Login, Tailscale-User-Name")
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(204)
+				return
+			}
+			c.Next()
+		})
+	}
 
 	r.Use(middleware.Profile(profileRepo))
 

@@ -49,9 +49,14 @@ export interface ShowDetail {
   episodes: Episode[]
 }
 
+export interface ShowWithEpisodes {
+  show: Show
+  episodes: Episode[]
+}
+
 export interface TagItems {
   tag: Tag
-  shows: Show[]
+  shows: ShowWithEpisodes[]
   singlesShow?: Show
   singlesEpisodes?: Episode[]
 }

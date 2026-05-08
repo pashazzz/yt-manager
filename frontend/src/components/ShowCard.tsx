@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import type { CSSProperties } from 'react'
 import type { Show, Episode, Tag } from '../types'
 import { thumbForEpisode } from '../utils/thumbnails'
 
@@ -8,9 +9,9 @@ interface Props {
   tags: Tag[]
   onDelete: (id: string) => void
   onMove: (showId: string, tagIds: string[]) => void
-  listeners?: any
+  listeners?: Record<string, unknown>
   setNodeRef?: (node: HTMLElement | null) => void
-  style?: React.CSSProperties
+  style?: CSSProperties
 }
 
 export default function ShowCard({ show, episodes, tags, onDelete, onMove, listeners, setNodeRef, style }: Props) {

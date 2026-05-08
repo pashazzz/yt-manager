@@ -126,21 +126,8 @@ func docToTag(d *document.Document) *models.Tag {
 		Name:       stringField(d, "name"),
 		OwnerID:    stringField(d, "ownerId"),
 		IsDefault:  boolField(d, "isDefault"),
-		OrderIndex: tagIntField(d, "orderIndex"),
+		OrderIndex: intField(d, "orderIndex"),
 		UseThumb:   boolField(d, "useThumb"),
 		CreatedAt:  createdAt,
-	}
-}
-
-func tagIntField(d *document.Document, key string) int {
-	switch v := d.Get(key).(type) {
-	case int:
-		return v
-	case float64:
-		return int(v)
-	case float32:
-		return int(v)
-	default:
-		return 0
 	}
 }

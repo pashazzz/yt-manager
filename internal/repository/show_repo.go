@@ -67,7 +67,7 @@ func (r *ShowRepo) getMaxOrderIndex(ownerID string) (int, error) {
 	if doc == nil {
 		return 0, nil
 	}
-	return showIntField(doc, "orderIndex"), nil
+	return intField(doc, "orderIndex"), nil
 }
 
 // FindByOwner возвращает все шоу профиля (для обратной совместимости).
@@ -87,30 +87,49 @@ func (r *ShowRepo) FindByOwner(ownerID string) ([]*models.Show, error) {
 	return shows, nil
 }
 
-// FindByTag возвращает шоу, принадлежащие конкретному тегу.
+// FindByTag возвращает шоу, отмеченные конкретным тегом (исключая служебные синглы).
+// Если includeUncategorized=true (для Default-тега), также возвращает шоу без тегов.
 func (r *ShowRepo) FindByTag(ownerID, tagID string, includeUncategorized bool) ([]*models.Show, error) {
-	all, err := r.FindByOwner(ownerID)
+	cond := query.Field("ownerId").Eq(ownerID).
+		And(query.Field("isSingles").Neq(true)).
+		And(query.Field("tagIds").Contains(tagID))
+
+	q := query.NewQuery(db.CollectionShows).
+		Where(cond).
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1}, query.SortOption{Field: "createdAt", Direction: 1})
+
+	docs, err := r.db.FindAll(q)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]*models.Show, 0, len(all))
-	for _, s := range all {
-		if s.IsSingles {
-			continue // Не возвращаем служебное шоу в списке обычных шоу
-		}
-		
-		isTagged := false
-		for _, tid := range s.TagIDs {
-			if tid == tagID {
-				isTagged = true
-				break
-			}
-		}
+	result := make([]*models.Show, 0, len(docs))
+	for _, d := range docs {
+		result = append(result, docToShow(d))
+	}
 
-		if isTagged {
-			result = append(result, s)
-		} else if includeUncategorized && len(s.TagIDs) == 0 {
+	if !includeUncategorized {
+		return result, nil
+	}
+
+	// Для Default-тега добавляем шоу без тегов вообще (legacy / новые без явного тега).
+	qAll := query.NewQuery(db.CollectionShows).
+		Where(query.Field("ownerId").Eq(ownerID).And(query.Field("isSingles").Neq(true))).
+		Sort(query.SortOption{Field: "orderIndex", Direction: 1}, query.SortOption{Field: "createdAt", Direction: 1})
+	allDocs, err := r.db.FindAll(qAll)
+	if err != nil {
+		return result, nil
+	}
+	seen := make(map[string]struct{}, len(result))
+	for _, s := range result {
+		seen[s.ID] = struct{}{}
+	}
+	for _, d := range allDocs {
+		s := docToShow(d)
+		if _, ok := seen[s.ID]; ok {
+			continue
+		}
+		if len(s.TagIDs) == 0 {
 			result = append(result, s)
 		}
 	}
@@ -199,26 +218,7 @@ func (r *ShowRepo) EnsureSinglesShow(ownerID, tagID string) (*models.Show, error
 
 func docToShow(d *document.Document) *models.Show {
 	createdAt, _ := d.Get("createdAt").(time.Time)
-	
-	// Миграция: если нет tagIds, но есть sectionId, используем его как единственный тег
-	tagIDs := []string{}
-	if d.Has("tagIds") {
-		if raw, ok := d.Get("tagIds").([]any); ok {
-			for _, v := range raw {
-				if s, ok := v.(string); ok {
-					tagIDs = append(tagIDs, s)
-				}
-			}
-		} else if raw, ok := d.Get("tagIds").([]string); ok {
-			tagIDs = raw
-		}
-	}
-	
-	if len(tagIDs) == 0 && d.Has("sectionId") {
-		if sid, ok := d.Get("sectionId").(string); ok && sid != "" {
-			tagIDs = []string{sid}
-		}
-	}
+	tagIDs := stringSliceField(d, "tagIds")
 
 	return &models.Show{
 		ID:           d.ObjectId(),
@@ -226,9 +226,9 @@ func docToShow(d *document.Document) *models.Show {
 		PlaylistURL:  stringField(d, "playlistUrl"),
 		OwnerID:      stringField(d, "ownerId"),
 		TagIDs:       tagIDs,
-		ReverseOrder: showBoolField(d, "reverseOrder"),
-		IsSingles:    showBoolField(d, "isSingles"),
-		OrderIndex:   showIntField(d, "orderIndex"),
+		ReverseOrder: boolField(d, "reverseOrder"),
+		IsSingles:    boolField(d, "isSingles"),
+		OrderIndex:   intField(d, "orderIndex"),
 		CreatedAt:    createdAt,
 	}
 }
@@ -236,22 +236,4 @@ func docToShow(d *document.Document) *models.Show {
 func stringField(d *document.Document, key string) string {
 	v, _ := d.Get(key).(string)
 	return v
-}
-
-func showBoolField(d *document.Document, key string) bool {
-	v, _ := d.Get(key).(bool)
-	return v
-}
-
-func showIntField(d *document.Document, key string) int {
-	switch v := d.Get(key).(type) {
-	case int:
-		return v
-	case float64:
-		return int(v)
-	case float32:
-		return int(v)
-	default:
-		return 0
-	}
 }
